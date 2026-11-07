@@ -144,7 +144,10 @@ class OpenAICompatibleProvider:
         }
         if tools:
             body["tools"] = [tool.as_openai() for tool in tools]
-            body["tool_choice"] = "auto"
+            # Ollama сама выбирает инструмент; явный tool_choice часть её
+            # версий не принимает и отвечает 400.
+            if self.settings.provider != "ollama":
+                body["tool_choice"] = "auto"
 
         headers = self._headers()
 
