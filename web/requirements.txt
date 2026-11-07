@@ -1,0 +1,10 @@
+# Зависимости веб-приложения (движок берёт свои из основного проекта).
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy>=2.0
+python-multipart>=0.0.9
+email-validator>=2.0
+
+# Для тестов
+httpx>=0.27
+pytest>=8.0

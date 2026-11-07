@@ -1,0 +1,39 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+venv/
+*.stldata
+*.wndata
+
+# Временные папки тестов API: создаются рядом с проектом при запуске pytest.
+statlab-web-tests-*/
+winnow-web-tests-*/
+statlab-migrate-*/
+
+# Временные папки распаковки однофайловой сборки: появляются рядом с .exe, пока
+# программа работает, и убираются при нормальном закрытии. Если программу закрыли
+# принудительно, папка остаётся.
+_MEI*/
+*.log
+
+# Собранные приложения и архивы для переноса: это артефакты, а не исходники.
+dist-web/
+*.exe
+
+# Отпечаток сертификата подписи: у каждого свой
+tools/.cert-thumbprint
+
+# Веб-приложение: окружение, база и загруженные наборы не хранятся в репозитории.
+web/.venv/
+web/data/
+web/*.db
+web/smoke*
+web/_srv.*
+web/frontend/node_modules/
+web/frontend/dist/
+web/*.db-journal
+web/ui-data/
