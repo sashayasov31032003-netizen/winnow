@@ -1937,7 +1937,227 @@ tbody tr:hover .cell-input:not([data-dirty="true"]) {
   }
 }
 
-/* ------------------------------------------------------ Исследование AI */
+/* ------------------------------------------------------ Качество данных */
+
+.quality-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 1000px;
+}
+
+.quality-head {
+  padding: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.quality-head > div:first-child {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.quality-head h2 {
+  margin: 0 0 6px;
+  font-size: var(--text-xl);
+}
+
+.quality-head p {
+  margin: 0;
+  max-width: 560px;
+  line-height: 1.55;
+}
+
+.quality-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-end;
+  flex: 0 0 auto;
+}
+
+.quality-model {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.quality-model select {
+  min-width: 220px;
+}
+
+.quality-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+}
+
+.quality-stat {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quality-stat[data-tone="warning"] {
+  border-color: var(--warning);
+}
+
+.quality-stat[data-tone="critical"] {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.quality-stat-value {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-stat-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.quality-block {
+  padding: var(--space-4);
+}
+
+.quality-block h3 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+}
+
+.quality-issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.quality-issue {
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--card-bg-soft);
+}
+
+.quality-issue[data-severity="critical"] {
+  border-left-color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.quality-issue[data-severity="warning"] {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.quality-issue[data-severity="note"] {
+  border-left-color: var(--border-strong);
+}
+
+.quality-issue-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.quality-severity {
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.quality-issue p {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.quality-vars {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+}
+
+.quality-ok {
+  color: var(--success);
+  margin: 0;
+}
+
+.quality-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+}
+
+.quality-metric {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card-bg-soft);
+}
+
+.quality-metric[data-warn="true"] {
+  border-color: var(--warning);
+}
+
+.quality-metric-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-metric-label {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.quality-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.quality-table th,
+.quality-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.quality-table th.num,
+.quality-table td.num {
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .quality-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .quality-model {
+    justify-content: stretch;
+  }
+
+  .quality-model select {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
 
 /* Третий раздел не помещается в одну строку с двумя: «Исследование AI» —
    отдельная строка переключателя, а не обрезанная подпись. */

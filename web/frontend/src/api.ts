@@ -157,6 +157,75 @@ export type AnalysisSummary = {
   created_at: string;
 };
 
+// ---------------------------------------------------- качество данных
+
+export type QualitySeverity = "critical" | "warning" | "note";
+
+export type QualityIssue = {
+  code: string;
+  severity: QualitySeverity;
+  title: string;
+  details: string;
+  variables: string[];
+  values: Record<string, unknown>;
+};
+
+export type QualityVariable = {
+  name: string;
+  label: string;
+  role: string;
+  type: string;
+  measure: string;
+  n: number;
+  n_missing: number;
+  missing_share: number;
+  n_unique: number;
+  n_outliers: number;
+  outlier_share: number;
+  skewness: number | null;
+  is_normal: boolean | null;
+  is_identifier: boolean;
+  is_constant: boolean;
+  is_binary: boolean;
+};
+
+export type QualityRegression = {
+  target: string;
+  predictors: string[];
+  n: number;
+  n_predictors: number;
+  r_squared: number;
+  adj_r_squared: number;
+  max_vif: number;
+  vif: Record<string, number>;
+  breusch_pagan_p: number | null;
+  breusch_pagan_lm: number | null;
+  durbin_watson: number;
+  cooks_max: number;
+  influential_count: number;
+  leverage_count: number;
+  residual_normality_p: number | null;
+  condition_index: number;
+  n_per_predictor: number;
+};
+
+export type QualityReport = {
+  n_cases: number;
+  n_variables: number;
+  complete_rows: number;
+  missing_cells: number;
+  missing_share: number;
+  duplicate_rows: number;
+  duplicate_share: number;
+  counts: Record<QualitySeverity, number>;
+  variables: QualityVariable[];
+  issues: QualityIssue[];
+  correlated: { a: string; b: string; r: number }[];
+  regression: QualityRegression | null;
+  target: string | null;
+  predictors: string[];
+};
+
 export type AIRunSummary = {
   run_id: number | null;
   procedure: string;
@@ -493,6 +562,13 @@ export const api = {
     request<{ runs: AnalysisSummary[] }>(`/api/datasets/${datasetId}/analyses`),
 
   aiAnalysis: (runId: number) => request<AnalysisDetail>(`/api/analyses/${runId}`),
+
+  // Проверка качества данных и модели: ничего не меняет, только отчёт.
+  quality: (datasetId: number, target: string | null = null, predictors: string[] = []) =>
+    request<{ report: QualityReport }>(
+      `/api/datasets/${datasetId}/quality`,
+      jsonInit({ target, predictors }),
+    ),
 };
 
 /**

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { plural } from "./format";
 import { ProcedureForm } from "./ProcedureForm";
 import { ChartView } from "./ChartView";
+import { QualityPanel } from "./QualityPanel";
 import {
   api,
   ApiError,
@@ -12,7 +13,7 @@ import {
   type Scenarios,
 } from "./api";
 
-type Tab = "variables" | "data" | "scenarios" | "procedures" | "charts";
+type Tab = "variables" | "data" | "quality" | "scenarios" | "procedures" | "charts";
 
 export function DatasetView({
   datasetId,
@@ -254,6 +255,13 @@ export function DatasetView({
         </button>
         <button
           type="button"
+          className={tab === "quality" ? "active" : ""}
+          onClick={() => setTab("quality")}
+        >
+          Качество
+        </button>
+        <button
+          type="button"
           className={tab === "scenarios" ? "active" : ""}
           onClick={() => setTab("scenarios")}
         >
@@ -295,6 +303,9 @@ export function DatasetView({
       )}
       {tab === "variables" && <VariablesTable detail={detail} />}
       {tab === "data" && <DataTable preview={preview} datasetId={datasetId} />}
+      {tab === "quality" && (
+        <QualityPanel datasetId={datasetId} variables={detail.variables} />
+      )}
       {tab === "scenarios" && (
         <ScenariosPanel payload={scenarios} running={running} onRun={runScenario} />
       )}

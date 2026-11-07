@@ -18,6 +18,7 @@ const TOOL_TITLES: Record<string, string> = {
   list_datasets: "Наборы",
   get_dataset_schema: "Схема данных",
   get_profile: "Профиль данных",
+  check_quality: "Проверка качества",
   get_preview: "Строки данных",
   list_procedures: "Процедуры",
   run_procedure: "Расчёт",

@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from winnow.analysis.quality import quality_report
 from winnow.stats.engine import REGISTRY_BY_KEY, execute
 from winnow.stats.profile import profile_dataset
 from winnow.ui.procedure_specs import DIALOG_SPECS
@@ -250,6 +251,54 @@ def _procedures(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------ расчёт
 
 
+def _check_quality(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+    """Проверка качества данных и линейной модели, без изменения данных."""
+    row, dataset = _load(context)
+    target = str(args.get("target") or "") or None
+    predictors = [str(name) for name in (args.get("predictors") or [])]
+    started = time.perf_counter()
+    try:
+        report = quality_report(dataset, target=target, predictors=predictors)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+    duration_ms = int((time.perf_counter() - started) * 1000)
+
+    result = report.as_result()
+    payload = result_payload(
+        result,
+        procedure="quality",
+        params={"target": target, "predictors": predictors},
+        dataset_name=row.name,
+        dataset_revision=storage.dataset_revision(row.path),
+        n_cases=int(len(dataset.frame)),
+        duration_ms=duration_ms,
+    )
+    payload["quality"] = report.as_payload()
+    run_id = store.save_run(
+        user_id=context.user_id,
+        dataset_id=context.dataset_id,
+        dataset_path=row.path,
+        procedure="quality",
+        title=result.title or "Проверка качества данных",
+        params=payload["params"],
+        payload=payload,
+        duration_ms=duration_ms,
+    )
+    payload["run_id"] = run_id
+    compact = compact_payload(payload)
+    quality = report.as_payload()
+    compact["ok"] = True
+    # Модели не нужны все переменные: ей нужны сводка, проблемы и модель.
+    compact["quality"] = {
+        "counts": quality["counts"],
+        "issues": quality["issues"][:12],
+        "regression": quality["regression"],
+        "target": quality["target"],
+        "predictors": quality["predictors"],
+    }
+    return compact
+
+
 def _run_procedure(context: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
     procedure = str(args.get("procedure") or "")
     if procedure not in ALLOWED_PROCEDURES:
@@ -420,6 +469,34 @@ TOOLS: dict[str, Tool] = {
             parameters={"type": "object", "properties": {}, "additionalProperties": False},
         ),
         _profile,
+    ),
+    "check_quality": Tool(
+        ToolSpec(
+            name="check_quality",
+            description=(
+                "Проверка качества данных и линейной модели: пропуски, дубликаты, "
+                "выбросы, дисбаланс групп, мультиколлинеарность, "
+                "гетероскедастичность и влиятельные наблюдения. Для модели укажи "
+                "target и предикторы; без target проверяются только данные."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "target": {
+                        "type": "string",
+                        "description": "Зависимая переменная для диагностики модели",
+                    },
+                    "predictors": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "maxItems": 20,
+                        "description": "Предикторы модели",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        ),
+        _check_quality,
     ),
     "get_preview": Tool(
         ToolSpec(

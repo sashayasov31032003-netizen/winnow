@@ -32,10 +32,16 @@ def _json_safe(value):
     """Готовит значение ячейки к JSON: NaN и бесконечность не сериализуются."""
     if value is None:
         return None
+    if isinstance(value, bool):
+        return value
     if isinstance(value, float):
         if math.isnan(value) or math.isinf(value):
             return None
         return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
     if hasattr(value, "item"):  # numpy-числа
         try:
             return _json_safe(value.item())
@@ -173,8 +179,8 @@ def scenarios_payload(dataset) -> dict:
     profile = profile_dataset(dataset)
     scenarios = suggest_scenarios(dataset, profile=profile)
     return {
-        "cases": profile.n_cases,
-        "variables": profile.n_variables,
+        "cases": int(profile.n_cases),
+        "variables": int(profile.n_variables),
         "notes": list(profile.notes),
         "scenarios": [
             {
@@ -183,7 +189,11 @@ def scenarios_payload(dataset) -> dict:
                 "question": item.question,
                 "why": item.why,
                 "procedure": item.procedure,
-                "params": {key: value for key, value in item.params.items()},
+                # В params попадают коды групп из pandas: это numpy-числа,
+                # которые JSON-сериализатор FastAPI не принимает.
+                "params": {
+                    key: _json_safe(value) for key, value in item.params.items()
+                },
                 "roles": dict(item.roles),
                 "confidence": item.confidence,
                 "caveats": list(item.caveats),

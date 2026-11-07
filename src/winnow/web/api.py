@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session, selectinload
 from winnow.data.io.csv_io import write_csv
 from winnow.data.io.excel import write_excel
 from winnow.data.io.sav_writer import write_sav
+from winnow.analysis.quality import quality_report
 from winnow.export import report_to_html, result_to_docx, result_to_xlsx
 from winnow.stats.charts import CHART_TYPES, build_chart_data, chart_caption
 from winnow.stats.multianswer import detect_multi_answer, format_report, split_all
@@ -824,6 +825,46 @@ def create_invite(
     db.add(invite)
     db.commit()
     return {"code": code}
+
+
+class QualityRequest(BaseModel):
+    """Параметры проверки качества.
+
+    Без target проверяются только данные; с target — ещё и линейная модель,
+    поэтому predictors имеют смысл лишь вместе с зависимой переменной.
+    """
+
+    target: str | None = None
+    predictors: list[str] = Field(default_factory=list)
+
+
+@router.post("/datasets/{dataset_id}/quality")
+def check_quality(
+    dataset_id: int,
+    payload: QualityRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Проверяет данные и, если задана цель, диагностику линейной модели.
+
+    Ничего не меняет и не сохраняет: это отчёт, по которому человек решает,
+    что делать с пропусками, выбросами и предикторами.
+    """
+    if len(payload.predictors) > 20:
+        raise HTTPException(
+            status_code=422, detail="Слишком много предикторов: максимум 20"
+        )
+    row = _owned(dataset_id, user, db)
+    dataset = _load_stored(row)
+    try:
+        report = quality_report(
+            dataset,
+            target=payload.target or None,
+            predictors=list(payload.predictors),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"report": report.as_payload()}
 
 
 class RunRequest(BaseModel):
