@@ -12,6 +12,7 @@ export type DatasetSummary = {
   original_filename: string;
   n_cases: number;
   n_variables: number;
+  ai_full_access: boolean;
   created_at: string;
 };
 
@@ -92,6 +93,119 @@ export type FieldSpecOut = {
 };
 
 export type ProcedureSchema = ProcedureInfo & { fields: FieldSpecOut[] };
+
+// ------------------------------------------------------- исследование AI
+
+export type AIConfig = {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  models: string[];
+  daily_limit: number;
+  used_today: number;
+  remaining: number;
+  data_policy: string;
+  note: string;
+};
+
+export type AITableColumn = {
+  label: string;
+  key?: string;
+  decimals?: number | null;
+  suffix?: string;
+  align?: string;
+};
+
+export type AITable = {
+  title: string;
+  number?: number | null;
+  columns: AITableColumn[];
+  rows: (string | number | null)[][];
+  footnotes?: string[];
+};
+
+export type AIFinding = { kind: string; text: string; source?: string; group?: string };
+
+export type AnalysisPayload = {
+  run_id: number | null;
+  procedure: string;
+  title: string;
+  dataset: { name: string; revision: string; n_cases: number };
+  tables: AITable[];
+  findings: AIFinding[];
+  warnings: string[];
+  notes: string[];
+  syntax: string;
+};
+
+export type AnalysisDetail = {
+  run_id: number;
+  dataset_id: number;
+  dataset_revision: string;
+  procedure: string;
+  title: string;
+  created_at: string;
+  payload: AnalysisPayload;
+};
+
+export type AnalysisSummary = {
+  run_id: number;
+  dataset_id: number;
+  procedure: string;
+  title: string;
+  dataset_revision: string;
+  created_at: string;
+};
+
+export type AIRunSummary = {
+  run_id: number | null;
+  procedure: string;
+  title: string;
+  n_tables: number;
+  warnings: string[];
+};
+
+export type AIToolEvent = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  ok?: boolean;
+  run_id?: number | null;
+  error?: string;
+  duration_ms?: number;
+};
+
+export type AIEvent =
+  | { type: "start"; conversation_id: number; model: string; provider: string }
+  | { type: "tool_call"; id: string; name: string; arguments: Record<string, unknown> }
+  | {
+      type: "tool_result";
+      id: string;
+      name: string;
+      ok: boolean;
+      run_id?: number | null;
+      error?: string;
+      duration_ms?: number;
+    }
+  | {
+      type: "run";
+      run_id: number;
+      procedure: string;
+      title: string;
+      n_tables: number;
+      warnings: string[];
+    }
+  | { type: "warning"; message: string }
+  | { type: "text"; text: string }
+  | {
+      type: "done";
+      conversation_id: number;
+      model: string;
+      steps: number;
+      runs: AIRunSummary[];
+      warnings: string[];
+    }
+  | { type: "error"; message: string };
 
 // ------------------------------------------------------------------ опросы
 //
@@ -362,4 +476,79 @@ export const api = {
       `/api/public/surveys/${encodeURIComponent(slug)}/responses`,
       jsonInit({ answers }),
     ),
+
+  // ------------------------------------------------------------ исследование AI
+
+  aiConfig: () => request<AIConfig>("/api/ai/config"),
+
+  // Разрешение ИИ видеть строки — отдельное действие человека, поэтому PATCH,
+  // а не часть загрузки набора.
+  aiSetAccess: (datasetId: number, allow: boolean) =>
+    request<{ dataset_id: number; ai_full_access: boolean }>(
+      `/api/datasets/${datasetId}/ai-access`,
+      jsonRequest("PATCH", { allow }),
+    ),
+
+  aiAnalyses: (datasetId: number) =>
+    request<{ runs: AnalysisSummary[] }>(`/api/datasets/${datasetId}/analyses`),
+
+  aiAnalysis: (runId: number) => request<AnalysisDetail>(`/api/analyses/${runId}`),
 };
+
+/**
+ * Поток одного хода агента. fetch + ReadableStream, а не EventSource: запрос
+ * POST, и EventSource не умеет ни тело, ни cookie-учёт в нашем виде.
+ */
+export async function streamAI(
+  body: { dataset_id: number; message: string; conversation_id: number | null },
+  onEvent: (event: AIEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/ai/chat", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    let detail = "Не удалось получить ответ агента";
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") detail = payload.detail;
+    } catch {
+      // ответ не JSON — оставляем общий текст
+    }
+    throw new ApiError(response.status, detail);
+  }
+  if (!response.body) {
+    throw new ApiError(0, "Браузер не поддерживает потоковый ответ");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary >= 0) {
+      const chunk = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+      const data = chunk
+        .split("\n")
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      if (data) {
+        try {
+          onEvent(JSON.parse(data) as AIEvent);
+        } catch {
+          // один битый пакет не должен ронять весь диалог
+        }
+      }
+      boundary = buffer.indexOf("\n\n");
+    }
+  }
+}

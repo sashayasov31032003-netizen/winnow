@@ -1937,3 +1937,309 @@ tbody tr:hover .cell-input:not([data-dirty="true"]) {
   }
 }
 
+/* ------------------------------------------------------ Исследование AI */
+
+/* Третий раздел не помещается в одну строку с двумя: «Исследование AI» —
+   отдельная строка переключателя, а не обрезанная подпись. */
+.section-switch {
+  flex-wrap: wrap;
+}
+
+.section-switch button {
+  flex: 1 1 42%;
+}
+
+.section-switch button:last-child {
+  flex: 1 0 100%;
+}
+
+.ai-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 900px;
+}
+
+.ai-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.ai-head h1 {
+  margin: 0 0 4px;
+  font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
+}
+
+.ai-head p {
+  margin: 0;
+  max-width: 560px;
+}
+
+.ai-badges {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.ai-controls {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ai-dataset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.ai-dataset-row label {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.ai-dataset-row select {
+  min-width: 260px;
+  flex: 1;
+  max-width: 420px;
+}
+
+.ai-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: var(--text-sm);
+}
+
+.ai-toggle input {
+  margin-top: 2px;
+}
+
+.ai-toggle small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  margin-top: 2px;
+  max-width: 620px;
+}
+
+.ai-note {
+  margin: 0;
+}
+
+.ai-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Пустой чат держит высоту, чтобы приглашение и примеры не прижимались к
+   нижнему краю; после первого сообщения карточка растёт по содержимому. */
+.ai-chat:has(.ai-empty) {
+  min-height: 360px;
+}
+
+.ai-transcript {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow-y: auto;
+  max-height: 56vh;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ai-empty {
+  color: var(--muted);
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+.ai-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ai-examples button {
+  text-align: left;
+}
+
+.ai-msg {
+  max-width: 86%;
+}
+
+.ai-msg.user {
+  align-self: flex-end;
+}
+
+.ai-user-text {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius) var(--radius) 4px var(--radius);
+  background: var(--accent-solid);
+  color: #ffffff;
+  font-size: var(--text-base);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.ai-msg.assistant {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+}
+
+.ai-assistant-text {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.ai-thinking {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.ai-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.ai-tool {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--card-bg-soft);
+}
+
+.ai-tool[data-status="error"] {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+}
+
+.ai-tool-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.ai-tool-name {
+  font-weight: 600;
+}
+
+.ai-tool-status {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.ai-tool-error {
+  margin: 6px 0 2px;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.ai-runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.ai-run {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--card-bg);
+}
+
+.ai-run summary {
+  cursor: pointer;
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--text-sm);
+}
+
+.ai-run-title {
+  font-weight: 600;
+}
+
+.ai-table-wrap {
+  overflow: auto;
+  margin-top: var(--space-3);
+}
+
+.ai-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-table th,
+.ai-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ai-table th:first-child,
+.ai-table td:first-child {
+  text-align: left;
+}
+
+.ai-findings,
+.ai-warnings {
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.ai-findings li[data-kind="caution"],
+.ai-warnings li {
+  color: var(--warning);
+}
+
+.ai-composer {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border);
+  align-items: flex-end;
+}
+
+.ai-composer textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 46px;
+  max-height: 160px;
+}
+
+@media (max-width: 720px) {
+  .ai-msg {
+    max-width: 100%;
+  }
+
+  .ai-composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+

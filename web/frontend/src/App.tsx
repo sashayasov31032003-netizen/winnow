@@ -7,6 +7,7 @@ import {
   type User,
 } from "./api";
 import { DatasetView } from "./DatasetView";
+import { ResearchAI } from "./ResearchAI";
 import { SurveysView } from "./SurveysView";
 import { plural, surveyStatusTitle } from "./format";
 import { applyTheme, initialTheme, type Theme } from "./theme";
@@ -36,11 +37,13 @@ export default function App() {
 }
 
 //: С какого раздела начинать. Ссылки с главной приходят как
-//: /app?section=surveys («создать опрос») или /app?section=data («исследовать»).
-function requestedSection(): "data" | "surveys" {
-  return new URLSearchParams(window.location.search).get("section") === "surveys"
-    ? "surveys"
-    : "data";
+//: /app?section=surveys («создать опрос»), /app?section=ai («исследование»)
+//: или /app?section=data («исследовать данные»).
+function requestedSection(): "data" | "surveys" | "ai" {
+  const section = new URLSearchParams(window.location.search).get("section");
+  if (section === "surveys") return "surveys";
+  if (section === "ai") return "ai";
+  return "data";
 }
 
 function AuthScreen({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
@@ -159,11 +162,12 @@ function Workspace({
 }: {
   user: User;
   onLogout: () => void;
-  initialSection: "data" | "surveys";
+  initialSection: "data" | "surveys" | "ai";
 }) {
-  // Два раздела одного приложения: данные и опросы. Переключатель живёт в
-  // панели, потому что от него зависит и список слева, и содержимое справа.
-  const [section, setSection] = useState<"data" | "surveys">(initialSection);
+  // Три раздела одного приложения: данные, опросы и исследование с ИИ.
+  // Переключатель живёт в панели, потому что от него зависит и список слева,
+  // и содержимое справа.
+  const [section, setSection] = useState<"data" | "surveys" | "ai">(initialSection);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
@@ -324,67 +328,18 @@ function Workspace({
             >
               Опросы
             </button>
+            <button
+              type="button"
+              className={section === "ai" ? "active" : ""}
+              aria-pressed={section === "ai"}
+              onClick={() => setSection("ai")}
+            >
+              Исследование AI
+            </button>
           </div>
         </div>
 
-        {section === "data" ? (
-          <>
-            <div className="sidebar-head">
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                disabled={uploading}
-              >
-                {uploading ? "Загружаем…" : "Загрузить файл"}
-              </button>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".sav,.xlsx,.xls,.csv,.txt,.wndata,.stldata"
-                style={{ display: "none" }}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void upload(file);
-                }}
-              />
-              <form className="link-form" onSubmit={importLink}>
-                <input
-                  value={link}
-                  onChange={(event) => setLink(event.target.value)}
-                  placeholder="Ссылка на CSV или Excel"
-                  aria-label="Ссылка на файл с данными"
-                  title="Ссылка на файл выгрузки: например, из результатов формы"
-                />
-                <button type="submit" className="ghost" disabled={!link.trim() || uploading}>
-                  →
-                </button>
-              </form>
-              <p className="muted small hint" style={{ margin: 0 }}>
-                SPSS (.sav), Excel, CSV — файлом или по ссылке
-              </p>
-            </div>
-
-            <div className="dataset-list">
-              {datasets.length === 0 && (
-                <p className="muted small">Пока нет наборов. Загрузите первый файл.</p>
-              )}
-              {datasets.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`dataset-item${selected === item.id ? " active" : ""}`}
-                  onClick={() => setSelected(item.id)}
-                >
-                  <span className="name">{item.name}</span>
-                  <span className="meta">
-                    {plural(item.n_cases, "случай", "случая", "случаев")} ·{" "}
-                    {plural(item.n_variables, "переменная", "переменные", "переменных")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
+        {section === "surveys" ? (
           <>
             <div className="sidebar-head">
               <button
@@ -417,6 +372,79 @@ function Workspace({
                     </span>
                     <span className="dot">·</span>
                     {plural(item.n_responses, "ответ", "ответа", "ответов")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="sidebar-head">
+              {section === "data" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={uploading}
+                  >
+                    {uploading ? "Загружаем…" : "Загрузить файл"}
+                  </button>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept=".sav,.xlsx,.xls,.csv,.txt,.wndata,.stldata"
+                    style={{ display: "none" }}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void upload(file);
+                    }}
+                  />
+                  <form className="link-form" onSubmit={importLink}>
+                    <input
+                      value={link}
+                      onChange={(event) => setLink(event.target.value)}
+                      placeholder="Ссылка на CSV или Excel"
+                      aria-label="Ссылка на файл с данными"
+                      title="Ссылка на файл выгрузки: например, из результатов формы"
+                    />
+                    <button
+                      type="submit"
+                      className="ghost"
+                      disabled={!link.trim() || uploading}
+                    >
+                      →
+                    </button>
+                  </form>
+                  <p className="muted small hint" style={{ margin: 0 }}>
+                    SPSS (.sav), Excel, CSV — файлом или по ссылке
+                  </p>
+                </>
+              ) : (
+                <p className="muted small" style={{ margin: 0 }}>
+                  Выберите набор: агент работает с ним и не меняет данные.
+                </p>
+              )}
+            </div>
+
+            <div className="dataset-list">
+              {datasets.length === 0 && (
+                <p className="muted small">
+                  {section === "data"
+                    ? "Пока нет наборов. Загрузите первый файл."
+                    : "Нет наборов. Загрузите данные в разделе «Данные»."}
+                </p>
+              )}
+              {datasets.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`dataset-item${selected === item.id ? " active" : ""}`}
+                  onClick={() => setSelected(item.id)}
+                >
+                  <span className="name">{item.name}</span>
+                  <span className="meta">
+                    {plural(item.n_cases, "случай", "случая", "случаев")} ·{" "}
+                    {plural(item.n_variables, "переменная", "переменные", "переменных")}
                   </span>
                 </button>
               ))}
@@ -536,6 +564,28 @@ function Workspace({
                 setSelected(datasetId);
                 void refresh();
               }}
+            />
+          )
+        ) : section === "ai" ? (
+          selected === null ? (
+            <div className="card empty">
+              <span className="empty-icon" aria-hidden="true">
+                ◇
+              </span>
+              <h2>Исследование AI</h2>
+              <p>
+                Выберите набор в панели слева. Агент посмотрит схему и профиль
+                данных, предложит метод и запустит реальный расчёт — числа
+                берутся из аналитического ядра Winnow.
+              </p>
+            </div>
+          ) : (
+            <ResearchAI
+              key={selected}
+              datasetId={selected}
+              datasets={datasets}
+              onSelect={setSelected}
+              onGoToData={() => setSection("data")}
             />
           )
         ) : selected === null ? (

@@ -12,6 +12,8 @@ venv/
 # Временные папки тестов API: создаются рядом с проектом при запуске pytest.
 statlab-web-tests-*/
 winnow-web-tests-*/
+winnow-ai-tests-*/
+pytest-of-*/
 statlab-migrate-*/
 
 # Временные папки распаковки однофайловой сборки: появляются рядом с .exe, пока

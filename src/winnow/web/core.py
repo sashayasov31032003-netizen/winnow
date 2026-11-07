@@ -26,6 +26,7 @@ from sqlalchemy import (  # noqa: E402
     ForeignKey,
     Integer,
     String,
+    Text,
     create_engine,
 )
 from sqlalchemy.orm import (  # noqa: E402
@@ -134,6 +135,9 @@ class Dataset(Base):
     path: Mapped[str] = mapped_column(String(500))
     n_cases: Mapped[int] = mapped_column(Integer, default=0)
     n_variables: Mapped[int] = mapped_column(Integer, default=0)
+    #: Разрешено ли ИИ видеть сырые строки набора. По умолчанию нет: модели
+    #: уходят только схема, профиль и агрегаты. Флаг включает человек.
+    ai_full_access: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     owner: Mapped[User] = relationship(back_populates="datasets")
@@ -258,6 +262,115 @@ class Answer(Base):
     response: Mapped[SurveyResponse] = relationship(back_populates="answers")
 
 
+# ------------------------------------------------------------ Research Intelligence
+#
+# Расчёт сохраняется отдельной строкой, а не живёт только в ответе HTTP.
+# Причины: на него ссылается агент [run:ID], из него собирается отчёт, и он
+# должен переживать перезапуск. payload - уже готовый JSON результата, поэтому
+# повторно считать процедуру при просмотре не нужно.
+
+class AnalysisRun(Base):
+    """Один выполненный расчёт с полным результатом."""
+
+    __tablename__ = "analysis_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    #: Отпечаток файла на момент расчёта (mtime+size). Позволяет заметить, что
+    #: данные изменились после расчёта, и не выдавать старые числа за новые.
+    dataset_revision: Mapped[str] = mapped_column(String(80), default="")
+    procedure: Mapped[str] = mapped_column(String(60))
+    title: Mapped[str] = mapped_column(String(200), default="")
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class AIConversation(Base):
+    """Диалог с агентом в рамках одного набора данных."""
+
+    __tablename__ = "ai_conversations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    dataset_id: Mapped[int | None] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    messages: Mapped[list["AIMessage"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
+    tool_calls: Mapped[list["AIToolCall"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan"
+    )
+
+
+class AIMessage(Base):
+    """Сообщение диалога. Хранится текст, а не разметка."""
+
+    __tablename__ = "ai_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_conversations.id"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(16))  # user | assistant
+    content: Mapped[str] = mapped_column(Text, default="")
+    model: Mapped[str] = mapped_column(String(80), default="")
+    tokens_in: Mapped[int] = mapped_column(Integer, default=0)
+    tokens_out: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    conversation: Mapped[AIConversation] = relationship(back_populates="messages")
+
+
+class AIToolCall(Base):
+    """Аудит вызова инструмента: что модель попросила и что получилось.
+
+    Нужен не для красоты: без него нельзя понять, почему агент назвал число,
+    и нельзя посчитать, сколько расчётов стоила сессия.
+    """
+
+    __tablename__ = "ai_tool_calls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_conversations.id"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(60))
+    arguments: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    error: Mapped[str] = mapped_column(Text, default="")
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analysis_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    conversation: Mapped[AIConversation] = relationship(back_populates="tool_calls")
+
+
+class SchemaVersion(Base):
+    """Версия схемы базы: без неё миграции не знают, что уже применено."""
+
+    __tablename__ = "schema_version"
+
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    applied_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+#: Текущая версия схемы. Увеличивается при каждом изменении, которое нельзя
+#: сделать одним `create_all` (новая колонка в существующей таблице).
+SCHEMA_VERSION = 1
+
+
 def _engine_args(url: str) -> dict:
     if url.startswith("sqlite"):
         # SQLite по умолчанию привязан к потоку, а FastAPI выполняет запросы в
@@ -275,20 +388,36 @@ def _add_missing_columns() -> None:
 
     ``create_all`` создаёт только недостающие таблицы, но не колонки в готовых.
     Без этого база, сделанная прошлой версией, падала бы на новом поле с
-    «no such column». Полноценные миграции (Alembic) появятся при публичном
-    сервисе; здесь достаточно одной необязательной колонки, поэтому шаг
-    намеренно узкий и явный, а не универсальный.
+    «no such column». Пока это единственный вид изменения схемы, поэтому шаг
+    намеренно узкий и явный; версия схемы записывается отдельно, чтобы было
+    видно, что миграция применена.
     """
     from sqlalchemy import inspect, text
 
     inspector = inspect(engine)
-    if not inspector.has_table("surveys"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("surveys")}
-    if "dataset_id" in columns:
-        return
-    with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE surveys ADD COLUMN dataset_id INTEGER"))
+    additions = (
+        # (таблица, колонка, SQL-тип). Порядок не важен, шаги идемпотентны.
+        ("surveys", "dataset_id", "INTEGER"),
+        ("datasets", "ai_full_access", "INTEGER DEFAULT 0"),
+    )
+    for table, column, ddl in additions:
+        if not inspector.has_table(table):
+            continue
+        columns = {item["name"] for item in inspector.get_columns(table)}
+        if column in columns:
+            continue
+        with engine.begin() as connection:
+            connection.execute(
+                text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            )
+
+
+def _record_schema_version() -> None:
+    """Записывает текущую версию схемы, если её ещё нет."""
+    with SessionLocal() as session:
+        if session.get(SchemaVersion, SCHEMA_VERSION) is None:
+            session.add(SchemaVersion(version=SCHEMA_VERSION))
+            session.commit()
 
 
 def init_db() -> None:
@@ -296,13 +425,14 @@ def init_db() -> None:
 
     Папка нужна ДО подключения к базе: SQLite не создаёт файл в
     несуществующем каталоге (в собранном виде это папка web рядом с exe).
-    Таблицы создаются при старте: для диплома этого достаточно, при
-    публичном сервисе понадобятся миграции (Alembic).
+    Таблицы создаются при старте; колонки в существующих таблицах добавляет
+    `_add_missing_columns`, а версия схемы фиксируется в `schema_version`.
     """
     WEB_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
     _add_missing_columns()
+    _record_schema_version()
 
 
 def get_db():
@@ -325,11 +455,17 @@ __all__ = [
     "SECRET",
     "SESSION_DAYS",
     "SURVEY_RATE_LIMIT",
+    "SCHEMA_VERSION",
+    "AIConversation",
+    "AIMessage",
+    "AIToolCall",
+    "AnalysisRun",
     "Answer",
     "Base",
     "Dataset",
     "Invite",
     "Question",
+    "SchemaVersion",
     "SessionLocal",
     "Survey",
     "SurveyResponse",

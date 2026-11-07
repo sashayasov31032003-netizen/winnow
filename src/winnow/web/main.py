@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from winnow.web.ai_api import router as ai_router
 from winnow.web.api import router
 from winnow.web.core import SECRET, init_db
 
@@ -70,6 +71,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(router)
+    # Research Intelligence подключается отдельным роутером: чат, диалоги,
+    # сохранённые расчёты и разрешение на сырые данные.
+    app.include_router(ai_router)
 
     def app_page() -> FileResponse:
         """Отдаёт собранный интерфейс: маршрут внутри разбирает JavaScript.

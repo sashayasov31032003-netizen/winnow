@@ -33,6 +33,7 @@ from winnow.ui.procedure_specs import DIALOG_SPECS
 from winnow.web import charts_svg
 from winnow.stats.engine import REGISTRY_BY_KEY, execute
 from winnow.web import storage, survey_dataset, surveys
+from winnow.web.policy import ALLOWED_PROCEDURES
 from winnow.web.core import (
     INVITE_ONLY,
     MAX_UPLOAD,
@@ -60,28 +61,6 @@ router = APIRouter(prefix="/api")
 
 #: Сколько ячеек можно изменить за один запрос.
 MAX_EDITS_PER_REQUEST = 500
-
-#: Процедуры, которые можно запускать через API.
-#:
-#: Список закрытый намеренно. «Вычислить переменную» и «Перекодировать» считают
-#: присланные извне выражения, а это уже другой уровень риска: выполнять чужой
-#: код на сервере нельзя, пока выражения не проверены отдельно. Графики тоже
-#: исключены - они возвращают не отчёт, а данные для рисования.
-ALLOWED_PROCEDURES = frozenset(
-    {
-        "frequencies",
-        "descriptives",
-        "crosstabs",
-        "ttest",
-        "anova",
-        "nonparametric",
-        "correlations",
-        "linear_regression",
-        "logistic_regression",
-        "reliability",
-        "factor",
-    }
-)
 
 #: Ставить ли флаг secure у cookie. На сервере с HTTPS - да, локально - нет,
 #: иначе браузер не сохранит cookie по http.
@@ -118,6 +97,7 @@ class DatasetOut(BaseModel):
     original_filename: str
     n_cases: int
     n_variables: int
+    ai_full_access: bool = False
     created_at: str
 
 
@@ -128,6 +108,7 @@ def _dataset_out(row: Dataset) -> DatasetOut:
         original_filename=row.original_filename,
         n_cases=row.n_cases,
         n_variables=row.n_variables,
+        ai_full_access=bool(row.ai_full_access),
         created_at=row.created_at.isoformat(),
     )
 

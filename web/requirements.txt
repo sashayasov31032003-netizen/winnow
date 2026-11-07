@@ -4,7 +4,8 @@ uvicorn[standard]>=0.30
 sqlalchemy>=2.0
 python-multipart>=0.0.9
 email-validator>=2.0
+# HTTP-клиент агента: запросы к OpenRouter и совместимым API.
+httpx>=0.27
 
 # Для тестов
-httpx>=0.27
 pytest>=8.0

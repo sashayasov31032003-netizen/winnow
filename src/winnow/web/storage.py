@@ -68,6 +68,20 @@ def load_dataset(path: str | pathlib.Path):
     return read_native(pathlib.Path(path))
 
 
+def dataset_revision(path: str | pathlib.Path) -> str:
+    """Отпечаток файла набора: время изменения и размер.
+
+    Нужен, чтобы связать расчёт с состоянием данных. Если файл поправили после
+    расчёта, отпечаток изменится, и старые числа нельзя будет выдать за новые.
+    Хэш содержимого здесь избыточен: набор перезаписывается целиком.
+    """
+    try:
+        stat = pathlib.Path(path).stat()
+    except OSError:
+        return ""
+    return f"{stat.st_mtime_ns}-{stat.st_size}"
+
+
 def variables_payload(dataset) -> list[dict]:
     """Список переменных с тем, что нужно показать в таблице."""
     result: list[dict] = []
@@ -182,6 +196,7 @@ def scenarios_payload(dataset) -> dict:
 __all__ = [
     "PREVIEW_ROWS",
     "apply_edits",
+    "dataset_revision",
     "save_dataset",
     "import_file",
     "load_dataset",
