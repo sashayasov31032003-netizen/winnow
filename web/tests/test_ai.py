@@ -16,6 +16,7 @@ import pathlib
 import tempfile
 
 import pytest
+import httpx
 
 _WORK = pathlib.Path(tempfile.mkdtemp(prefix="winnow-ai-tests-"))
 os.environ.setdefault("WINNOW_DB_URL", f"sqlite:///{_WORK / 'test.db'}")
@@ -35,7 +36,15 @@ from winnow.web.ai.guardrails import (  # noqa: E402
     ToolArgumentsError,
     unverified_numbers,
 )
-from winnow.web.ai.provider import FakeProvider, Reply, ToolCall  # noqa: E402
+from winnow.web.ai.provider import (  # noqa: E402
+    AIProviderError,
+    FakeProvider,
+    OpenAICompatibleProvider,
+    Reply,
+    ToolCall,
+    ToolSpec,
+    create_provider,
+)
 from winnow.web.ai.tools import ToolContext, execute_tool  # noqa: E402
 from winnow.web import ai_api  # noqa: E402
 from winnow.web.core import Base, engine  # noqa: E402
@@ -316,6 +325,133 @@ def test_number_check_understands_inequalities():
     payload = {"run_id": 1, "p": 0.0004}
     assert unverified_numbers("p < 0,001", [payload]) == []
     assert unverified_numbers("p < 0,0001", [payload]) == ["0,0001"]
+
+
+# ------------------------------------------------------------------ провайдеры
+
+
+def _clear_ai_env(monkeypatch) -> None:
+    for name in (
+        "WINNOW_AI_PROVIDER",
+        "WINNOW_AI_KEY",
+        "WINNOW_OPENROUTER_API_KEY",
+        "YANDEX_API_KEY",
+        "VSEGPT_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "WINNOW_AI_MODEL",
+        "WINNOW_AI_BASE_URL",
+        "WINNOW_AI_AUTH_SCHEME",
+        "WINNOW_AI_FOLDER_ID",
+        "YANDEX_FOLDER_ID",
+        "WINNOW_AI_PROJECT",
+        "WINNOW_AI_FALLBACKS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_yandex_preset_builds_model_uri(monkeypatch):
+    _clear_ai_env(monkeypatch)
+    monkeypatch.setenv("WINNOW_AI_PROVIDER", "yandex")
+    monkeypatch.setenv("WINNOW_AI_KEY", "secret")
+    monkeypatch.setenv("WINNOW_AI_FOLDER_ID", "folder-1")
+
+    settings = load_settings()
+    assert settings.base_url == "https://ai.api.cloud.yandex.net/v1"
+    assert settings.auth_scheme == "Api-Key"
+    assert settings.model == "gpt://folder-1/aliceai-llm-flash/latest"
+    assert settings.project == "folder-1"
+    assert settings.enabled is True
+
+
+def test_vsegpt_preset_is_openai_compatible(monkeypatch):
+    _clear_ai_env(monkeypatch)
+    monkeypatch.setenv("WINNOW_AI_PROVIDER", "vsegpt")
+    monkeypatch.setenv("WINNOW_AI_KEY", "secret")
+
+    settings = load_settings()
+    assert settings.base_url == "https://api.vsegpt.ru/v1"
+    assert settings.model == "openai/gpt-4o-mini"
+    assert settings.auth_scheme == "Bearer"
+    assert settings.enabled is True
+
+
+def test_ollama_works_without_key(monkeypatch):
+    _clear_ai_env(monkeypatch)
+    monkeypatch.setenv("WINNOW_AI_PROVIDER", "ollama")
+
+    settings = load_settings()
+    assert settings.base_url == "http://127.0.0.1:11434/v1"
+    assert settings.model == "qwen3:8b"
+    assert settings.enabled is True
+    # Ollama ключ не проверяет, но заголовок Authorization должен быть заполнен.
+    assert settings.api_key == "ollama"
+
+
+def test_yandex_authorization_header_and_tool_call(monkeypatch):
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["authorization"] = request.headers.get("authorization", "")
+        seen["project"] = request.headers.get("openai-project", "")
+        body = json.loads(request.content)
+        seen["tool"] = body["tools"][0]["function"]["name"]
+        return httpx.Response(
+            200,
+            json={
+                "model": "alice",
+                "choices": [
+                    {
+                        "message": {
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call_1",
+                                    "function": {
+                                        "name": "run_procedure",
+                                        "arguments": '{"procedure": "frequencies"}',
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ],
+            },
+        )
+
+    settings = AISettings(
+        provider="yandex",
+        model="gpt://folder-1/aliceai-llm-flash/latest",
+        base_url="https://ai.example/v1",
+        api_key="secret",
+        auth_scheme="Api-Key",
+        project="folder-1",
+    )
+    provider = OpenAICompatibleProvider(
+        settings, transport=httpx.MockTransport(handler)
+    )
+    reply = asyncio.run(
+        provider.complete(
+            [{"role": "user", "content": "Посчитай частоты"}],
+            [ToolSpec(name="run_procedure", description="", parameters={"type": "object"})],
+        )
+    )
+
+    assert seen["authorization"] == "Api-Key secret"
+    assert seen["project"] == "folder-1"
+    assert seen["tool"] == "run_procedure"
+    assert reply.tool_calls[0].name == "run_procedure"
+    assert reply.tool_calls[0].arguments == {"procedure": "frequencies"}
+
+
+def test_yandex_without_key_or_folder_is_not_enabled(monkeypatch):
+    _clear_ai_env(monkeypatch)
+    monkeypatch.setenv("WINNOW_AI_PROVIDER", "yandex")
+    monkeypatch.setenv("WINNOW_AI_KEY", "secret")
+
+    settings = load_settings()
+    assert settings.enabled is False
+    with pytest.raises(AIProviderError):
+        create_provider(settings)
 
 
 # ------------------------------------------------------------------ HTTP / SSE

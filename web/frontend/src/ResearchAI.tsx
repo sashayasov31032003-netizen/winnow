@@ -25,6 +25,18 @@ const TOOL_TITLES: Record<string, string> = {
   get_run: "Сохранённый расчёт",
 };
 
+//: Провайдер показываем коротким именем, а не длинным ID модели: у Yandex
+//: модель выглядит как gpt://<каталог>/... и в бейдж не помещается.
+const PROVIDER_TITLES: Record<string, string> = {
+  fake: "демо без модели",
+  yandex: "Yandex AI Studio",
+  vsegpt: "VseGPT",
+  ollama: "Ollama",
+  deepseek: "DeepSeek",
+  openrouter: "OpenRouter",
+  custom: "свой API",
+};
+
 const EXAMPLES = [
   "Опиши данные и предложи, с чего начать",
   "Сравни тревожность у мужчин и женщин",
@@ -292,8 +304,8 @@ export function ResearchAI({
           </p>
         </div>
         <div className="ai-badges">
-          <span className="badge" title="Модель, которую использует сервер">
-            {config?.provider === "fake" ? "демо без модели" : model || "модель"}
+          <span className="badge" title={config?.model ?? ""}>
+            {config ? PROVIDER_TITLES[config.provider] ?? config.provider : model || "модель"}
           </span>
           {config && (
             <span

@@ -11,7 +11,7 @@
 
 ## Состояние: Фаза 0
 
-Готово и покрыто тестами (16 тестов ИИ + прежние 434 движка и 105 API):
+Готово и покрыто тестами (21 тест ИИ + прежние 434 движка и 110 API):
 
 | Часть | Что сделано |
 |---|---|
@@ -34,7 +34,7 @@
 ai_api.py  — права, квоты, поток
    ▼
 ai/agent.py — цикл: модель → вызов → результат → модель
-   ├── ai/provider.py — ChatProvider: OpenRouter / fake
+   ├── ai/provider.py — ChatProvider: OpenAI-совместимые API и fake
    ├── ai/tools.py    — инструменты, только чтение
    ├── ai/guardrails.py — схемы аргументов, проверка чисел
    └── ai/store.py    — диалоги, вызовы, расчёты
@@ -54,31 +54,70 @@ ai/agent.py — цикл: модель → вызов → результат →
 
 `ChatProvider` — один метод `complete(messages, tools)`. Реализации:
 
-- `OpenRouterProvider` — OpenAI-совместимый HTTP, перебор основной и резервных
-  моделей при 429/5xx/404, понятные ошибки;
+- `OpenAICompatibleProvider` — общий HTTP-клиент для OpenRouter, VseGPT,
+  Yandex AI Studio, DeepSeek, Ollama и любого совместимого endpoint'а; умеет
+  `Bearer` и `Api-Key`, перебирает основную и резервные модели, объясняет ошибки;
 - `FakeProvider` — детерминированные ответы для тестов и демо-режима без ключа.
 
-Смена провайдера — переменные окружения, не правка кода. Локальный сервер
-(Ollama/vLLM) подключается тем же OpenAI-совместимым путём.
+Смена провайдера — переменные окружения, не правка кода.
+
+### Провайдеры, доступные из России
+
+| Провайдер | API | Инструменты | Оплата | Ограничения |
+|---|---|---|---|---|
+| **Yandex AI Studio** (Alice AI LLM / Flash) | OpenAI-совместимый `/v1/chat/completions` | `tools` + `tool_choice` | рубли, карты РФ и СБП; Alice AI Flash — 0,1 ₽ / 0,2 ₽ за 1 000 токенов | нужен каталог (`folder_id`) и ключ; бесплатного тарифа нет, но у Yandex Cloud бывает стартовый грант |
+| **VseGPT** | OpenAI-совместимый `/v1` | `tools` у моделей с бейджем | 199 ₽ за 30 дней + стоимость токенов; бесплатный тестовый период | без VPN; 1 запрос/сек; агрегатор, а не первоисточник |
+| **GigaChat** (Сбер) | свой API, OAuth, `functions`/`function_call` | вызов функций (legacy-формат) | 365 млн токенов freemium для действующих клиентов; новые клиенты с 01.09.2026 — через cloud.ru | нужен отдельный адаптер, в этой версии не подключён |
+| **Ollama** (локально) | OpenAI-совместимый `/v1` | `tools` у Qwen3, Llama 3.1+ и подобных | бесплатно | нужен компьютер с 8–16 ГБ RAM; качество ниже облачных моделей, зато данные не уходят |
+| **DeepSeek** напрямую | OpenAI-совместимый | `tools` | дешево, но иностранная оплата | доступность и оплата из РФ не гарантированы |
+| **OpenRouter** | OpenAI-совместимый | `tools` | бесплатные модели с лимитом | из РФ без VPN недоступен — оставлен как опция для других регионов |
+
+**Про Алису.** Приложение «Алиса» бесплатно, но публичного API «Алисы» для
+сторонних приложений нет. Программируемый доступ — это Yandex AI Studio с
+моделями **Alice AI LLM** и **Alice AI Flash**; он платный (цены выше), оплата
+российскими картами, данные клиентов не используются для обучения, логирование
+можно отключить заголовком `x-data-logging-enabled: false`.
+
+Примеры включения (ключи — только на сервере):
+
+```powershell
+# Yandex AI Studio: Alice AI Flash. model можно не задавать — соберётся из каталога
+set WINNOW_AI_PROVIDER=yandex
+set WINNOW_AI_KEY=<API-Key>
+set WINNOW_AI_FOLDER_ID=<идентификатор каталога>
+set WINNOW_AI_MODEL=gpt://<каталог>/aliceai-llm-flash/latest
+
+# VseGPT: агрегатор, работает без VPN
+set WINNOW_AI_PROVIDER=vsegpt
+set WINNOW_AI_KEY=<ключ VseGPT>
+set WINNOW_AI_MODEL=openai/gpt-4o-mini
+
+# Ollama: совсем бесплатно и локально, модель должна уметь tools
+set WINNOW_AI_PROVIDER=ollama
+set WINNOW_AI_MODEL=qwen3:8b
+```
 
 ## Настройки
 
 | Переменная | По умолчанию | Смысл |
 |---|---|---|
-| `WINNOW_AI_PROVIDER` | `fake`, если нет ключа; иначе `openrouter` | провайдер |
-| `WINNOW_AI_KEY` (или `WINNOW_OPENROUTER_API_KEY`) | — | ключ, только на сервере |
-| `WINNOW_AI_MODEL` | `xingchen-agi/xing4.0-29b-a4b:free` | основная модель |
-| `WINNOW_AI_FALLBACKS` | две бесплатные модели | резерв через запятую |
-| `WINNOW_AI_BASE_URL` | `https://openrouter.ai/api/v1` | совместимый endpoint |
+| `WINNOW_AI_PROVIDER` | `fake`, если нет ключа; иначе `openrouter` | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
+| `WINNOW_AI_KEY` | — | ключ провайдера, только на сервере; принимаются также `YANDEX_API_KEY`, `VSEGPT_API_KEY`, `DEEPSEEK_API_KEY` |
+| `WINNOW_AI_MODEL` | зависит от провайдера | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud (можно `YANDEX_FOLDER_ID`) |
+| `WINNOW_AI_BASE_URL` | адрес пресета | совместимый endpoint; для `custom` обязателен |
+| `WINNOW_AI_AUTH_SCHEME` | `Bearer` / `Api-Key` у Yandex | как подписывать ключ |
+| `WINNOW_AI_PROJECT` | каталог у Yandex | заголовок `OpenAI-Project` |
+| `WINNOW_AI_FALLBACKS` | бесплатные модели OpenRouter | резерв через запятую |
 | `WINNOW_AI_MAX_STEPS` | 6 | вызовов модели за ход |
 | `WINNOW_AI_MAX_TOKENS` | 1400 | предел ответа модели |
 | `WINNOW_AI_DAILY_TURNS` | 20 | сообщений на пользователя в сутки |
 | `WINNOW_AI_ALLOW_TEXT` | 1 | общий запрет сырых строк, если 0 |
 
-Бесплатные модели подходят для разработки и демонстраций: лимит примерно
-50 запросов в день, один провайдер на endpoint, часть endpoint'ов может
-обучаться на промптах. Для реальных данных с персональными сведениями нужен
-платный endpoint с политикой «не обучаться» или локальная модель.
+Бесплатные модели OpenRouter подходят для разработки и демонстраций: лимит
+примерно 50 запросов в день, один провайдер на endpoint, часть endpoint'ов
+может обучаться на промптах. Для реальных данных с персональными сведениями
+нужен платный endpoint с политикой «не обучаться» или локальная модель.
 
 ## Инструменты
 
@@ -126,16 +165,32 @@ ai/agent.py — цикл: модель → вызов → результат →
 set WINNOW_AI_PROVIDER=fake
 web\run.cmd
 
-# С ключом OpenRouter
+# Yandex AI Studio (Alice AI Flash), оплата в рублях
+set WINNOW_AI_PROVIDER=yandex
+set WINNOW_AI_KEY=<API-Key>
+set WINNOW_AI_FOLDER_ID=<каталог>
+web\run.cmd
+
+# VseGPT — OpenAI-совместимый агрегатор без VPN
+set WINNOW_AI_PROVIDER=vsegpt
+set WINNOW_AI_KEY=<ключ>
+web\run.cmd
+
+# DeepSeek напрямую
+set WINNOW_AI_PROVIDER=deepseek
+set WINNOW_AI_KEY=<ключ>
+web\run.cmd
+
+# OpenRouter (если доступен из вашего региона)
+set WINNOW_AI_PROVIDER=openrouter
 set WINNOW_AI_KEY=sk-or-...
-set WINNOW_AI_MODEL=xingchen-agi/xing4.0-29b-a4b:free
 web\run.cmd
 ```
 
 Проверки:
 
 ```powershell
-python -m pytest web\tests -q     # 105 тестов API и ИИ
+python -m pytest web\tests -q     # 110 тестов API и ИИ
 python -m pytest -q               # 434 теста движка
 ```
 

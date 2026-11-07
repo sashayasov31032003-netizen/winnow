@@ -86,7 +86,7 @@ src/winnow/web/          сервер
   ai/                     Research Intelligence
     agent.py              цикл: модель → инструмент → результат → ответ
     tools.py              8 инструментов поверх движка (только чтение)
-    provider.py           OpenRouter (OpenAI-совместимый) и fake-провайдер
+    provider.py           OpenAI-совместимые провайдеры (Yandex, VseGPT, Ollama) и fake
     store.py              диалоги, вызовы инструментов, analysis_runs
     guardrails.py         проверка аргументов, чисел в ответе, квоты
     config.py             модель, резервные модели, лимиты, политика данных
@@ -98,7 +98,7 @@ web/frontend/             React + TypeScript + Vite
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API и ИИ (105)
+web/tests/                тесты API и ИИ (110)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -233,7 +233,7 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 105 тестов API и ИИ
+web\.venv\Scripts\python -m pytest web\tests -q     # 110 тестов API и ИИ
 python -m pytest -q                                    # 434 теста движка
 ```
 
@@ -249,13 +249,20 @@ python -m pytest -q                                    # 434 теста движ
 | `WINNOW_MAX_UPLOAD` | 50 МБ | предел размера файла |
 | `WINNOW_SURVEY_RATE` | `30` | сколько ответов на опрос принимается с адреса за час |
 | `WINNOW_CORS` | адреса Vite | откуда фронтенду разрешено обращаться |
-| `WINNOW_AI_PROVIDER` | `fake` без ключа | `fake` или `openrouter` |
-| `WINNOW_AI_KEY` | — | ключ модели, **только на сервере** |
-| `WINNOW_AI_MODEL`, `WINNOW_AI_FALLBACKS` | бесплатная модель | основная и резервные модели |
+| `WINNOW_AI_PROVIDER` | `fake` без ключа | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
+| `WINNOW_AI_KEY` | — | ключ модели, **только на сервере** (также `YANDEX_API_KEY`, `VSEGPT_API_KEY`) |
+| `WINNOW_AI_MODEL` | зависит от провайдера | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud |
+| `WINNOW_AI_BASE_URL`, `WINNOW_AI_AUTH_SCHEME` | по пресету | адрес и схема авторизации (`Bearer` / `Api-Key`) |
 | `WINNOW_AI_DAILY_TURNS` | `20` | сообщений агенту на пользователя в сутки |
 | `WINNOW_AI_ALLOW_TEXT` | `1` | `0` — запретить сырые строки всем наборам |
 | `WINNOW_HOST`, `WINNOW_PORT` | `127.0.0.1`, `8000` | куда слушать |
 | `WINNOW_OPEN_BROWSER` | `1` | `0` - не открывать браузер |
+
+Из России проще всего **Yandex AI Studio** (Alice AI Flash, рубли, ключ
+`Api-Key`) или **VseGPT** (OpenAI-совместимый агрегатор, без VPN); совсем
+бесплатно — локальный **Ollama**. OpenRouter из РФ обычно недоступен. Подробные
+примеры — в `docs/research-intelligence.md`.
 
 ## Оформление
 

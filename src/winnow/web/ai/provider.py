@@ -19,7 +19,7 @@ from typing import Any, Iterable, Protocol, Sequence
 
 import httpx
 
-from winnow.web.ai.config import AISettings
+from winnow.web.ai.config import AISettings, COMPATIBLE_PROVIDERS
 
 
 class AIProviderError(RuntimeError):
@@ -95,18 +95,42 @@ def _parse_arguments(raw: Any) -> tuple[dict[str, Any], str]:
     return parsed, ""
 
 
-class OpenRouterProvider:
-    """OpenAI-совместимый HTTP-провайдер (OpenRouter и совместимые серверы)."""
+class OpenAICompatibleProvider:
+    """OpenAI-совместимый HTTP-провайдер.
 
-    name = "openrouter"
+    Так работают OpenRouter, VseGPT, Yandex AI Studio, DeepSeek и локальный
+    Ollama. Отличаются адрес, схема авторизации и форма имени модели; сам
+    протокол один, поэтому отдельный класс на каждого провайдера не нужен.
+    """
 
-    def __init__(self, settings: AISettings) -> None:
+    def __init__(
+        self,
+        settings: AISettings,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.settings = settings
+        self.name = settings.provider
+        #: Подмена транспорта для тестов: настоящая сеть в тестах не нужна.
+        self._transport = transport
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://winnow.local",
+            "X-Title": "Winnow Research Intelligence",
+        }
+        if self.settings.api_key:
+            headers["Authorization"] = (
+                f"{self.settings.auth_scheme} {self.settings.api_key}"
+            )
+        if self.settings.project:
+            headers["OpenAI-Project"] = self.settings.project
+        return headers
 
     async def complete(
         self, messages: list[dict[str, Any]], tools: Sequence[ToolSpec]
     ) -> Reply:
-        if not self.settings.api_key:
+        if not self.settings.api_key and self.settings.provider != "ollama":
             raise AIProviderError(
                 "Ключ ИИ не задан. Укажите WINNOW_AI_KEY на сервере "
                 "или включите демо-режим WINNOW_AI_PROVIDER=fake."
@@ -122,15 +146,12 @@ class OpenRouterProvider:
             body["tools"] = [tool.as_openai() for tool in tools]
             body["tool_choice"] = "auto"
 
-        headers = {
-            "Authorization": f"Bearer {self.settings.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://winnow.local",
-            "X-Title": "Winnow Research Intelligence",
-        }
+        headers = self._headers()
 
         failures: list[str] = []
-        async with httpx.AsyncClient(timeout=self.settings.timeout) as client:
+        async with httpx.AsyncClient(
+            timeout=self.settings.timeout, transport=self._transport
+        ) as client:
             for model in self.settings.models:
                 body["model"] = model
                 try:
@@ -251,16 +272,27 @@ def create_provider(settings: AISettings) -> ChatProvider:
     """Собирает провайдера по настройкам. Ошибка — понятная, не трейсбек."""
     if settings.provider == "fake":
         return FakeProvider()
-    if settings.provider in {"openrouter", "openai", "openai-compatible"}:
-        if not settings.api_key:
+    if settings.provider in COMPATIBLE_PROVIDERS:
+        if not settings.enabled:
+            if settings.provider == "yandex":
+                raise AIProviderError(
+                    "Для Yandex AI Studio нужны ключ (WINNOW_AI_KEY или "
+                    "YANDEX_API_KEY), каталог (WINNOW_AI_FOLDER_ID) и модель "
+                    "(WINNOW_AI_MODEL, например gpt://<каталог>/aliceai-llm-flash/latest)."
+                )
             raise AIProviderError(
-                "Для провайдера OpenRouter нужен ключ WINNOW_AI_KEY на сервере."
+                f"Для провайдера «{settings.provider}» не хватает настроек: "
+                "проверьте WINNOW_AI_KEY, WINNOW_AI_BASE_URL и WINNOW_AI_MODEL."
             )
-        return OpenRouterProvider(settings)
+        return OpenAICompatibleProvider(settings)
     raise AIProviderError(
-        f"Неизвестный провайдер «{settings.provider}». "
-        "Поддерживаются: fake, openrouter."
+        f"Неизвестный провайдер «{settings.provider}». Поддерживаются: "
+        "fake, openrouter, vsegpt, yandex, ollama, deepseek, custom."
     )
+
+
+#: Старое имя класса: на нём завязаны тесты и документация прошлой версии.
+OpenRouterProvider = OpenAICompatibleProvider
 
 
 __all__ = [
@@ -268,6 +300,7 @@ __all__ = [
     "ChatProvider",
     "DEMO_TEXT",
     "FakeProvider",
+    "OpenAICompatibleProvider",
     "OpenRouterProvider",
     "Reply",
     "ToolCall",

@@ -93,8 +93,11 @@ def ai_config(user: User = Depends(current_user)) -> dict[str, Any]:
             "Демо-режим: модель не подключена, запросы наружу не уходят. "
             "Для работы агента задайте WINNOW_AI_KEY на сервере."
         )
-    elif not settings.api_key:
-        payload["note"] = "Ключ ИИ не задан на сервере: агент не сможет ответить."
+    elif not settings.enabled:
+        payload["note"] = (
+            "Не хватает настроек провайдера: проверьте ключ, каталог (для Yandex) "
+            "и имя модели."
+        )
     else:
         payload["note"] = (
             "ИИ видит схему, профиль и агрегаты. Сырые строки — только при "
