@@ -11,8 +11,8 @@
 
 ## Состояние: Фазы 0–1
 
-Готово и покрыто тестами (21 тест ИИ и 9 тестов инспектора + прежние 438
-движка и 121 API):
+Готово и покрыто тестами (26 тестов ИИ и 9 тестов инспектора + прежние 438
+движка и 126 API):
 
 | Часть | Что сделано |
 |---|---|
@@ -72,7 +72,7 @@ ai/agent.py — цикл: модель → вызов → результат →
 | **GigaChat** (Сбер) | свой API, OAuth, `functions`/`function_call` | вызов функций (legacy-формат) | 365 млн токенов freemium для действующих клиентов; новые клиенты с 01.09.2026 — через cloud.ru | нужен отдельный адаптер, в этой версии не подключён |
 | **Ollama** (локально) | OpenAI-совместимый `/v1` | `tools` у Qwen3, Llama 3.1+ и подобных | бесплатно | нужен компьютер с 8–16 ГБ RAM; качество ниже облачных моделей, зато данные не уходят |
 | **DeepSeek** напрямую | OpenAI-совместимый | `tools` | дешево, но иностранная оплата | доступность и оплата из РФ не гарантированы |
-| **OpenRouter** | OpenAI-совместимый | `tools` | бесплатные модели с лимитом | из РФ без VPN недоступен — оставлен как опция для других регионов |
+| **OpenRouter** | OpenAI-совместимый | `tools` у платных endpoint'ов; у `:free` часто нет | бесплатные модели с лимитом | из РФ без VPN обычно недоступен; `deepseek-r1:free` часто не умеет tools |
 
 **Про Алису.** Приложение «Алиса» бесплатно, но публичного API «Алисы» для
 сторонних приложений нет. Программируемый доступ — это Yandex AI Studio с
@@ -99,17 +99,42 @@ set WINNOW_AI_PROVIDER=ollama
 set WINNOW_AI_MODEL=qwen3:8b
 ```
 
+### OpenRouter и DeepSeek R1
+
+OpenRouter подключён как обычный OpenAI-совместимый провайдер; модель по
+умолчанию для него — `deepseek/deepseek-r1:free`. Ключ читается из
+`OPENROUTER_API_KEY` (или `WINNOW_AI_KEY` / `WINNOW_OPENROUTER_API_KEY`):
+
+```powershell
+web\run-openrouter.cmd     # спросит ключ и не сохранит его
+# или вручную:
+set OPENROUTER_API_KEY=<ключ>
+set WINNOW_AI_PROVIDER=openrouter
+set WINNOW_AI_MODEL=deepseek/deepseek-r1:free
+web\run.cmd
+```
+
+**Важное ограничение.** Бесплатные `:free`-endpoint'ы OpenRouter часто не
+поддерживают нативный вызов инструментов: запрос с `tools` возвращает
+`404 No endpoints found that support tool use`. Поэтому при такой ошибке
+провайдер повторяет запрос **без инструментов**, а ответ помечается
+предупреждением «без расчётов»: числам из него доверять нельзя. Для реальных
+расчётов нужна модель/endpoint с поддержкой tools (например, платный вариант
+DeepSeek или VseGPT/Yandex). Отключить повтор можно
+`WINNOW_AI_TOOL_FALLBACK=0`.
+
 ## Настройки
 
 | Переменная | По умолчанию | Смысл |
 |---|---|---|
 | `WINNOW_AI_PROVIDER` | `fake`, если нет ключа; иначе `openrouter` | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
-| `WINNOW_AI_KEY` | — | ключ провайдера, только на сервере; принимаются также `YANDEX_API_KEY`, `VSEGPT_API_KEY`, `DEEPSEEK_API_KEY` |
-| `WINNOW_AI_MODEL` | зависит от провайдера | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_KEY` | — | ключ провайдера, только на сервере; принимаются также `OPENROUTER_API_KEY`, `WINNOW_OPENROUTER_API_KEY`, `YANDEX_API_KEY`, `VSEGPT_API_KEY`, `DEEPSEEK_API_KEY` |
+| `WINNOW_AI_MODEL` | `deepseek/deepseek-r1:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
 | `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud (можно `YANDEX_FOLDER_ID`) |
 | `WINNOW_AI_BASE_URL` | адрес пресета | совместимый endpoint; для `custom` обязателен |
 | `WINNOW_AI_AUTH_SCHEME` | `Bearer` / `Api-Key` у Yandex | как подписывать ключ |
 | `WINNOW_AI_PROJECT` | каталог у Yandex | заголовок `OpenAI-Project` |
+| `WINNOW_AI_TOOL_FALLBACK` | `1` | повтор без tools для моделей, которые их не умеют |
 | `WINNOW_AI_FALLBACKS` | бесплатные модели OpenRouter | резерв через запятую |
 | `WINNOW_AI_MAX_STEPS` | 6 | вызовов модели за ход |
 | `WINNOW_AI_MAX_TOKENS` | 1400 | предел ответа модели |
@@ -158,6 +183,10 @@ set WINNOW_AI_MODEL=qwen3:8b
 - SQLite и один процесс: квота считается по сообщениям в базе, при нескольких
   воркерах нужен общий счётчик;
 - в тестах модель не вызывается: проверяется наш цикл, а не чужой API;
+- **DeepSeek R1 free часто не поддерживает tools**: при ошибке провайдер
+  повторяет запрос без инструментов, ответ помечается «без расчётов»;
+- OpenRouter может быть недоступен по сети из РФ — это ограничение сети, а не
+  ключа; тогда нужен VseGPT, Yandex AI Studio или локальная модель;
 - история диалогов сохраняется в базе, но экран пока не восстанавливает прошлый
   диалог: каждое открытие раздела — новый разговор.
 
@@ -193,7 +222,7 @@ web\run.cmd
 Проверки:
 
 ```powershell
-python -m pytest web\tests -q     # 121 тест API, ИИ и качества
+python -m pytest web\tests -q     # 126 тестов API, ИИ и качества
 python -m pytest -q               # 438 тестов движка
 ```
 

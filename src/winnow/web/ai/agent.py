@@ -102,6 +102,12 @@ async def run_turn(
 
         if not reply.tool_calls:
             final_text = (reply.text or "").strip()
+            if reply.tool_fallback:
+                warnings.append(
+                    "Модель не поддерживает вызов инструментов: ответ дан без "
+                    "расчётов, числам из него доверять нельзя."
+                )
+                yield {"type": "warning", "message": warnings[-1]}
             break
 
         calls = list(reply.tool_calls)

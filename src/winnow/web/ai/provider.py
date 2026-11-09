@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Protocol, Sequence
 
 import httpx
@@ -66,6 +66,10 @@ class Reply:
     tool_calls: list[ToolCall] = field(default_factory=list)
     model: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
+    #: Провайдер не умеет tools: запрос повторён без них. Агент обязан
+    #: предупредить человека, что числа не из расчёта.
+    tool_fallback: bool = False
+    fallback_reason: str = ""
 
 
 class ChatProvider(Protocol):
@@ -93,6 +97,63 @@ def _parse_arguments(raw: Any) -> tuple[dict[str, Any], str]:
     if not isinstance(parsed, dict):
         return {}, "Аргументы должны быть JSON-объектом"
     return parsed, ""
+
+
+def _tool_error(response: httpx.Response) -> bool:
+    """Похоже ли 400/404 на «этот endpoint не умеет tools»."""
+    text = (response.text or "").lower()
+    if "tool" not in text and "function" not in text:
+        return False
+    return any(
+        marker in text
+        for marker in (
+            "support tool",
+            "no endpoints found",
+            "tool_choice",
+            "tool choice",
+            "function calling",
+            "tools are not supported",
+        )
+    )
+
+
+def _reply_from_response(response: httpx.Response, model: str) -> Reply | None:
+    """Разбирает успешный ответ OpenAI-совместимого API."""
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    choices = data.get("choices") or []
+    if not choices:
+        return None
+    message = choices[0].get("message") or {}
+    text = message.get("content") or ""
+    if isinstance(text, list):
+        # Некоторые провайдеры отдают содержание массивом частей.
+        text = "".join(
+            part.get("text", "") for part in text if isinstance(part, dict)
+        )
+
+    tool_calls: list[ToolCall] = []
+    for index, raw_call in enumerate(message.get("tool_calls") or []):
+        function = raw_call.get("function") or {}
+        arguments, parse_error = _parse_arguments(function.get("arguments"))
+        tool_calls.append(
+            ToolCall(
+                id=str(raw_call.get("id") or f"call_{index + 1}"),
+                name=str(function.get("name") or ""),
+                arguments=arguments,
+                raw_arguments=str(function.get("arguments") or ""),
+                parse_error=parse_error,
+            )
+        )
+
+    return Reply(
+        text=str(text),
+        tool_calls=tool_calls,
+        model=str(data.get("model") or model),
+        usage=dict(data.get("usage") or {}),
+    )
 
 
 class OpenAICompatibleProvider:
@@ -150,6 +211,7 @@ class OpenAICompatibleProvider:
                 body["tool_choice"] = "auto"
 
         headers = self._headers()
+        tools_requested = bool(tools)
 
         failures: list[str] = []
         async with httpx.AsyncClient(
@@ -169,9 +231,54 @@ class OpenAICompatibleProvider:
 
                 if response.status_code in (401, 403):
                     raise AIProviderError(
-                        "Провайдер отклонил ключ ИИ. Проверьте WINNOW_AI_KEY "
-                        "и доступ к выбранной модели."
+                        "Провайдер отклонил ключ ИИ. Проверьте WINNOW_AI_KEY / "
+                        "OPENROUTER_API_KEY и доступ к выбранной модели."
                     )
+                if response.status_code == 402:
+                    raise AIProviderError(
+                        "У аккаунта провайдера закончился баланс или бесплатный "
+                        "лимит. Пополните счёт либо выберите другую модель."
+                    )
+                if (
+                    response.status_code in (400, 404)
+                    and tools_requested
+                    and self.settings.tool_fallback
+                    and _tool_error(response)
+                ):
+                    # Бесплатные endpoint'ы OpenRouter часто не поддерживают
+                    # tools. Чтобы человек всё же получил ответ, повторяем без
+                    # инструментов — но ответ будет без расчётов.
+                    retry_body = {
+                        key: value
+                        for key, value in body.items()
+                        if key not in {"tools", "tool_choice"}
+                    }
+                    try:
+                        retry = await client.post(
+                            f"{self.settings.base_url}/chat/completions",
+                            json=retry_body,
+                            headers=headers,
+                        )
+                    except (httpx.TimeoutException, httpx.TransportError) as exc:
+                        failures.append(
+                            f"{model}: сеть недоступна при повторе ({exc.__class__.__name__})"
+                        )
+                        continue
+                    if retry.status_code == 200:
+                        reply = _reply_from_response(retry, model)
+                        if reply is not None:
+                            return replace(
+                                reply,
+                                tool_fallback=True,
+                                fallback_reason=(
+                                    "Провайдер не поддерживает вызов инструментов "
+                                    "для этой модели"
+                                ),
+                            )
+                    failures.append(
+                        f"{model}: tools не поддерживаются (HTTP {retry.status_code})"
+                    )
+                    continue
                 if response.status_code == 400:
                     raise AIProviderError(
                         "Провайдер отклонил запрос (400). Проверьте имя модели "
@@ -190,46 +297,11 @@ class OpenAICompatibleProvider:
                     failures.append(f"{model}: HTTP {response.status_code}")
                     continue
 
-                try:
-                    data = response.json()
-                except ValueError:
-                    failures.append(f"{model}: ответ не JSON")
+                reply = _reply_from_response(response, model)
+                if reply is None:
+                    failures.append(f"{model}: некорректный ответ")
                     continue
-
-                choices = data.get("choices") or []
-                if not choices:
-                    failures.append(f"{model}: пустой ответ")
-                    continue
-                message = choices[0].get("message") or {}
-                text = message.get("content") or ""
-                if isinstance(text, list):
-                    # Некоторые провайдеры отдают содержание массивом частей.
-                    text = "".join(
-                        part.get("text", "") for part in text if isinstance(part, dict)
-                    )
-
-                tool_calls: list[ToolCall] = []
-                for index, raw_call in enumerate(message.get("tool_calls") or []):
-                    function = raw_call.get("function") or {}
-                    arguments, parse_error = _parse_arguments(
-                        function.get("arguments")
-                    )
-                    tool_calls.append(
-                        ToolCall(
-                            id=str(raw_call.get("id") or f"call_{index + 1}"),
-                            name=str(function.get("name") or ""),
-                            arguments=arguments,
-                            raw_arguments=str(function.get("arguments") or ""),
-                            parse_error=parse_error,
-                        )
-                    )
-
-                return Reply(
-                    text=str(text),
-                    tool_calls=tool_calls,
-                    model=str(data.get("model") or model),
-                    usage=dict(data.get("usage") or {}),
-                )
+                return reply
 
         detail = "; ".join(failures[-3:]) if failures else "нет доступных моделей"
         raise AIProviderError(

@@ -102,7 +102,7 @@ web/frontend/             React + TypeScript + Vite
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (121)
+web/tests/                тесты API, ИИ и качества (126)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -254,7 +254,7 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 121 тест API, ИИ и качества
+web\.venv\Scripts\python -m pytest web\tests -q     # 126 тестов API, ИИ и качества
 python -m pytest -q                                    # 438 тестов движка
 ```
 
@@ -271,10 +271,11 @@ python -m pytest -q                                    # 438 тестов дви
 | `WINNOW_SURVEY_RATE` | `30` | сколько ответов на опрос принимается с адреса за час |
 | `WINNOW_CORS` | адреса Vite | откуда фронтенду разрешено обращаться |
 | `WINNOW_AI_PROVIDER` | `fake` без ключа | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
-| `WINNOW_AI_KEY` | — | ключ модели, **только на сервере** (также `YANDEX_API_KEY`, `VSEGPT_API_KEY`) |
-| `WINNOW_AI_MODEL` | зависит от провайдера | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_KEY` | — | ключ модели, **только на сервере** (также `OPENROUTER_API_KEY`, `WINNOW_OPENROUTER_API_KEY`, `YANDEX_API_KEY`, `VSEGPT_API_KEY`) |
+| `WINNOW_AI_MODEL` | `deepseek/deepseek-r1:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
 | `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud |
 | `WINNOW_AI_BASE_URL`, `WINNOW_AI_AUTH_SCHEME` | по пресету | адрес и схема авторизации (`Bearer` / `Api-Key`) |
+| `WINNOW_AI_TOOL_FALLBACK` | `1` | повтор без tools, если модель их не умеет (ответ без расчётов) |
 | `WINNOW_AI_DAILY_TURNS` | `20` | сообщений агенту на пользователя в сутки |
 | `WINNOW_AI_ALLOW_TEXT` | `1` | `0` — запретить сырые строки всем наборам |
 | `WINNOW_HOST`, `WINNOW_PORT` | `127.0.0.1`, `8000` | куда слушать |
@@ -286,7 +287,14 @@ python -m pytest -q                                    # 438 тестов дви
 примеры — в `docs/research-intelligence.md`.
 
 Для запуска с моделью есть готовые файлы: `web\run-vsegpt.cmd` (спросит ключ и
-не сохранит его) и `web\run-ollama.cmd` (локально, без ключа).
+не сохранит его), `web\run-openrouter.cmd` (то же для R1) и
+`web\run-ollama.cmd` (локально, без ключа).
+
+**OpenRouter и DeepSeek R1.** В `run-openrouter.cmd` модель —
+`deepseek/deepseek-r1:free`. Бесплатные endpoint'ы OpenRouter часто не
+поддерживают `tools`; тогда сервер повторяет запрос без инструментов и
+предупреждает, что ответ без расчётов. Для расчётов нужен endpoint с tools
+(платный DeepSeek, VseGPT или Yandex).
 
 ## Оформление
 

@@ -32,7 +32,12 @@ FREE_MODELS: tuple[str, ...] = (
     "cohere/north-mini-code:free",
 )
 
-DEFAULT_MODEL = FREE_MODELS[0]
+#: Модель OpenRouter по умолчанию — по запросу проекта. R1 хорошо рассуждает,
+#: но многие :free-endpoint'ы не поддерживают tools; провайдер умеет повторить
+#: запрос без инструментов и пометить ответ как «без расчётов».
+OPENROUTER_MODEL = "deepseek/deepseek-r1:free"
+
+DEFAULT_MODEL = OPENROUTER_MODEL
 
 #: Готовые связки «провайдер → адрес, схема авторизации, модель по умолчанию».
 #: Модели для Yandex подставляются вместе с каталогом (folder_id): без него
@@ -41,7 +46,7 @@ PRESETS: dict[str, dict[str, str]] = {
     "openrouter": {
         "base_url": "https://openrouter.ai/api/v1",
         "auth_scheme": "Bearer",
-        "model": DEFAULT_MODEL,
+        "model": OPENROUTER_MODEL,
     },
     # Российский агрегатор с OpenAI-совместимым API: работает без VPN,
     # поддерживает tools у моделей с соответствующим бейджем.
@@ -107,6 +112,7 @@ def _key() -> str:
     for name in (
         "WINNOW_AI_KEY",
         "WINNOW_OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY",
         "YANDEX_API_KEY",
         "VSEGPT_API_KEY",
         "DEEPSEEK_API_KEY",
@@ -134,6 +140,9 @@ class AISettings:
     auth_scheme: str = "Bearer"
     #: Заголовок OpenAI-Project: нужен части совместимых платформ (Yandex).
     project: str = ""
+    #: Если endpoint не умеет tools, повторить запрос без инструментов и
+    #: честно пометить ответ как «без расчётов».
+    tool_fallback: bool = True
     timeout: float = 60.0
     max_steps: int = 6
     max_tokens: int = 1400
@@ -212,6 +221,7 @@ def load_settings() -> AISettings:
         api_key=key,
         auth_scheme=auth_scheme,
         project=project,
+        tool_fallback=_flag("WINNOW_AI_TOOL_FALLBACK", True),
         timeout=max(5.0, min(180.0, _number("WINNOW_AI_TIMEOUT", 60.0))),
         max_steps=_integer("WINNOW_AI_MAX_STEPS", 6, low=1, high=12),
         max_tokens=_integer("WINNOW_AI_MAX_TOKENS", 1400, low=200, high=8000),
@@ -229,6 +239,7 @@ def describe(settings: AISettings) -> dict:
         "models": list(settings.models),
         "daily_limit": settings.daily_turns,
         "data_policy": "aggregates",
+        "tool_fallback": settings.tool_fallback,
     }
 
 
@@ -248,6 +259,7 @@ __all__ = [
     "COMPATIBLE_PROVIDERS",
     "DEFAULT_MODEL",
     "FREE_MODELS",
+    "OPENROUTER_MODEL",
     "PRESETS",
     "describe",
     "load_settings",

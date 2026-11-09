@@ -335,6 +335,7 @@ def _clear_ai_env(monkeypatch) -> None:
         "WINNOW_AI_PROVIDER",
         "WINNOW_AI_KEY",
         "WINNOW_OPENROUTER_API_KEY",
+        "OPENROUTER_API_KEY",
         "YANDEX_API_KEY",
         "VSEGPT_API_KEY",
         "DEEPSEEK_API_KEY",
@@ -452,6 +453,121 @@ def test_yandex_without_key_or_folder_is_not_enabled(monkeypatch):
     assert settings.enabled is False
     with pytest.raises(AIProviderError):
         create_provider(settings)
+
+
+def test_openrouter_key_accepts_plain_env_name(monkeypatch):
+    _clear_ai_env(monkeypatch)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-secret")
+
+    settings = load_settings()
+    assert settings.provider == "openrouter"
+    assert settings.api_key == "sk-or-secret"
+    assert settings.enabled is True
+
+
+def test_model_without_tools_falls_back_to_text():
+    """OpenRouter :free часто не умеет tools: ответ без расчётов, с пометкой."""
+    calls: list[bool] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append("tools" in body)
+        if len(calls) == 1:
+            return httpx.Response(
+                404,
+                json={
+                    "error": {
+                        "message": "No endpoints found that support tool use.",
+                        "code": 404,
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-r1:free",
+                "choices": [
+                    {"message": {"content": "Не могу считать без инструментов."}}
+                ],
+            },
+        )
+
+    settings = AISettings(
+        provider="openrouter",
+        model="deepseek/deepseek-r1:free",
+        base_url="https://openrouter.example/v1",
+        api_key="secret",
+    )
+    provider = OpenAICompatibleProvider(settings, transport=httpx.MockTransport(handler))
+    reply = asyncio.run(
+        provider.complete(
+            [{"role": "user", "content": "Посчитай среднее"}],
+            [ToolSpec(name="get_profile", description="", parameters={"type": "object"})],
+        )
+    )
+    assert calls == [True, False]
+    assert reply.tool_fallback is True
+    assert "без инструментов" in reply.text
+
+
+def test_tool_fallback_can_be_disabled():
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            404,
+            json={"error": {"message": "No endpoints found that support tool use."}},
+        )
+
+    settings = AISettings(
+        provider="openrouter",
+        model="deepseek/deepseek-r1:free",
+        base_url="https://openrouter.example/v1",
+        api_key="secret",
+        tool_fallback=False,
+    )
+    provider = OpenAICompatibleProvider(settings, transport=httpx.MockTransport(handler))
+    with pytest.raises(AIProviderError):
+        asyncio.run(
+            provider.complete(
+                [{"role": "user", "content": "Посчитай"}],
+                [ToolSpec(name="get_profile", description="", parameters={"type": "object"})],
+            )
+        )
+
+
+def test_payment_required_is_reported_clearly():
+    settings = AISettings(
+        provider="openrouter",
+        model="deepseek/deepseek-r1:free",
+        base_url="https://openrouter.example/v1",
+        api_key="secret",
+    )
+    provider = OpenAICompatibleProvider(
+        settings,
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(402, json={"error": {"message": "Payment required"}})
+        ),
+    )
+    with pytest.raises(AIProviderError) as error:
+        asyncio.run(provider.complete([{"role": "user", "content": "Привет"}], []))
+    assert "баланс" in str(error.value)
+
+
+def test_rate_limit_is_reported_clearly():
+    settings = AISettings(
+        provider="openrouter",
+        model="deepseek/deepseek-r1:free",
+        base_url="https://openrouter.example/v1",
+        api_key="secret",
+    )
+    provider = OpenAICompatibleProvider(
+        settings,
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(429, json={"error": {"message": "Rate limit"}})
+        ),
+    )
+    with pytest.raises(AIProviderError) as error:
+        asyncio.run(provider.complete([{"role": "user", "content": "Привет"}], []))
+    assert "лимит" in str(error.value).lower()
 
 
 # ------------------------------------------------------------------ HTTP / SSE
