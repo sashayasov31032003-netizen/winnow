@@ -73,6 +73,21 @@ Winnow - веб-версия, переносимая сборка
   set WINNOW_SECRET=длинная-строка   свой ключ подписи сессий;
                                 для доступа из интернета обязателен
 
+AI в переносимой версии (необязательно)
+---------------------------------------
+Ключ модели не входит в архив. Рядом лежат три запуска:
+
+  OpenRouter.cmd   ключ OpenRouter, модель deepseek/deepseek-r1:free
+  VseGPT.cmd       ключ VseGPT, модель openai/gpt-4o-mini (работает из РФ)
+  Ollama.cmd       локальный Ollama, без ключа (нужен ollama pull qwen3:8b)
+
+Ключ спрашивается при запуске и не сохраняется в файлы. В браузере откройте
+раздел «Исследование AI».
+
+OpenRouter из России часто отвечает "403 Access denied by security policy".
+Это блокировка сети или региона, а не ключ: ключ не поможет, нужен VPN/прокси
+либо запуск через VseGPT.cmd или Ollama.cmd.
+
 Если Windows пишет "Could not create temporary directory"
 ---------------------------------------------------------
 Это бывает только у однофайловой сборки (Winnow-web.exe без папки _internal):
@@ -85,6 +100,51 @@ Winnow - веб-версия, переносимая сборка
 У версии-каталога (эта папка) такой проблемы нет.
 "@
 Set-Content -Path (Join-Path $folder "README.txt") -Value $readme -Encoding UTF8
+
+# Запускалки с моделью: ключ вводится при старте и никуда не сохраняется.
+# Имена без кириллицы, чтобы cmd не зависел от кодовой страницы консоли.
+$launchers = @{
+    "OpenRouter.cmd" = @'
+@echo off
+setlocal
+cd /d "%~dp0"
+if "%OPENROUTER_API_KEY%"=="" set /p OPENROUTER_API_KEY=OpenRouter API key: 
+if "%OPENROUTER_API_KEY%"=="" (
+  echo No key entered.
+  pause
+  exit /b 1
+)
+set "WINNOW_AI_PROVIDER=openrouter"
+set "WINNOW_AI_MODEL=deepseek/deepseek-r1:free"
+set "WINNOW_AI_KEY=%OPENROUTER_API_KEY%"
+Winnow-web.exe
+'@
+    "VseGPT.cmd" = @'
+@echo off
+setlocal
+cd /d "%~dp0"
+if "%WINNOW_AI_KEY%"=="" set /p WINNOW_AI_KEY=VseGPT API key: 
+if "%WINNOW_AI_KEY%"=="" (
+  echo No key entered.
+  pause
+  exit /b 1
+)
+set "WINNOW_AI_PROVIDER=vsegpt"
+set "WINNOW_AI_MODEL=openai/gpt-4o-mini"
+Winnow-web.exe
+'@
+    "Ollama.cmd" = @'
+@echo off
+setlocal
+cd /d "%~dp0"
+set "WINNOW_AI_PROVIDER=ollama"
+set "WINNOW_AI_MODEL=qwen3:8b"
+Winnow-web.exe
+'@
+}
+foreach ($name in $launchers.Keys) {
+    Set-Content -Path (Join-Path $folder $name) -Value $launchers[$name] -Encoding ASCII
+}
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Add-Type -AssemblyName System.IO.Compression.FileSystem

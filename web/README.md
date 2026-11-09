@@ -102,7 +102,7 @@ web/frontend/             React + TypeScript + Vite
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (126)
+web/tests/                тесты API, ИИ и качества (127)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -254,7 +254,7 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 126 тестов API, ИИ и качества
+web\.venv\Scripts\python -m pytest web\tests -q     # 127 тестов API, ИИ и качества
 python -m pytest -q                                    # 438 тестов движка
 ```
 
@@ -332,7 +332,12 @@ powershell -ExecutionPolicy Bypass -File tools\build_web_portable.ps1
 |---|---|
 | `Winnow-web\` | каталог: запускается быстрее, данные лежат рядом в `web\` |
 | `Winnow-web.exe` | один файл: проще передать, при запуске распаковывается во временную папку |
-| `Winnow-web-portable.zip` | архив каталога с `README.txt` для получателя (~75 МБ) |
+| `Winnow-web-portable.zip` | архив каталога с `README.txt` и запусками для AI (~83 МБ) |
+
+В архиве рядом с exe лежат `OpenRouter.cmd`, `VseGPT.cmd` и `Ollama.cmd`: они
+спрашивают ключ (кроме Ollama) и не сохраняют его. OpenRouter из России часто
+отвечает `403 Access denied by security policy` — это блокировка сети/региона,
+а не ключ; в этом случае используйте VseGPT или Ollama.
 
 Данные (база, опросы, ответы, наборы) лежат в папке `web\` рядом с exe, поэтому
 переносить нужно папку целиком. Настройки — те же `WINNOW_*`, что и у обычного

@@ -229,10 +229,31 @@ class OpenAICompatibleProvider:
                     failures.append(f"{model}: сеть недоступна ({exc.__class__.__name__})")
                     continue
 
-                if response.status_code in (401, 403):
+                if response.status_code == 401:
                     raise AIProviderError(
                         "Провайдер отклонил ключ ИИ. Проверьте WINNOW_AI_KEY / "
                         "OPENROUTER_API_KEY и доступ к выбранной модели."
+                    )
+                if response.status_code == 403:
+                    text = (response.text or "").lower()
+                    if any(
+                        marker in text
+                        for marker in (
+                            "security policy",
+                            "access denied",
+                            "cloudflare",
+                            "blocked",
+                        )
+                    ):
+                        raise AIProviderError(
+                            "Провайдер заблокировал доступ (403 Access denied by "
+                            "security policy). Это сетевое или региональное "
+                            "ограничение, а не ключ: нужен VPN/прокси либо другой "
+                            "провайдер — VseGPT, Yandex AI Studio или локальный Ollama."
+                        )
+                    raise AIProviderError(
+                        "Провайдер отклонил ключ ИИ (403). Проверьте "
+                        "WINNOW_AI_KEY / OPENROUTER_API_KEY."
                     )
                 if response.status_code == 402:
                     raise AIProviderError(

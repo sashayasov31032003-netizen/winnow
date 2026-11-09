@@ -534,6 +534,33 @@ def test_tool_fallback_can_be_disabled():
         )
 
 
+def test_security_block_is_not_reported_as_bad_key():
+    settings = AISettings(
+        provider="openrouter",
+        model="deepseek/deepseek-r1:free",
+        base_url="https://openrouter.example/v1",
+        api_key="secret",
+    )
+    provider = OpenAICompatibleProvider(
+        settings,
+        transport=httpx.MockTransport(
+            lambda _request: httpx.Response(
+                403,
+                json={
+                    "success": False,
+                    "error": "Access denied by security policy.",
+                },
+            )
+        ),
+    )
+    with pytest.raises(AIProviderError) as error:
+        asyncio.run(provider.complete([{"role": "user", "content": "Привет"}], []))
+    message = str(error.value)
+    assert "403" in message
+    assert "VPN" in message
+    assert "ключ" in message  # «не ключ», но это не «ключ отклонён»
+
+
 def test_payment_required_is_reported_clearly():
     settings = AISettings(
         provider="openrouter",
