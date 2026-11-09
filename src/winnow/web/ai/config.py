@@ -32,10 +32,10 @@ FREE_MODELS: tuple[str, ...] = (
     "cohere/north-mini-code:free",
 )
 
-#: Модель OpenRouter по умолчанию — по запросу проекта. R1 хорошо рассуждает,
-#: но многие :free-endpoint'ы не поддерживают tools; провайдер умеет повторить
-#: запрос без инструментов и пометить ответ как «без расчётов».
-OPENROUTER_MODEL = "deepseek/deepseek-r1:free"
+#: Модель OpenRouter по умолчанию. DeepSeek R1 free больше не обслуживается
+#: (OpenRouter: «no provider serves this model»), поэтому выбрана свободная
+#: модель с реальным вызовом инструментов и большим контекстом.
+OPENROUTER_MODEL = "dots-studio/dots-3-note-preview:free"
 
 DEFAULT_MODEL = OPENROUTER_MODEL
 

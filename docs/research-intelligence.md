@@ -99,10 +99,9 @@ set WINNOW_AI_PROVIDER=ollama
 set WINNOW_AI_MODEL=qwen3:8b
 ```
 
-### OpenRouter и DeepSeek R1
+### OpenRouter: что работает сейчас
 
-OpenRouter подключён как обычный OpenAI-совместимый провайдер; модель по
-умолчанию для него — `deepseek/deepseek-r1:free`. Ключ читается из
+OpenRouter подключён как обычный OpenAI-совместимый провайдер; ключ читается из
 `OPENROUTER_API_KEY` (или `WINNOW_AI_KEY` / `WINNOW_OPENROUTER_API_KEY`):
 
 ```powershell
@@ -110,18 +109,27 @@ web\run-openrouter.cmd     # спросит ключ и не сохранит е
 # или вручную:
 set OPENROUTER_API_KEY=<ключ>
 set WINNOW_AI_PROVIDER=openrouter
-set WINNOW_AI_MODEL=deepseek/deepseek-r1:free
+set WINNOW_AI_MODEL=dots-studio/dots-3-note-preview:free
 web\run.cmd
 ```
+
+**Проверено с VPN и реальным ключом.** OpenRouter отвечает, ключ принят.
+`deepseek/deepseek-r1:free` больше не обслуживается: на любой запрос приходит
+`404 no provider serves this model anymore`. Бесплатных моделей DeepSeek в
+каталоге сейчас нет. Из доступных free-моделей с инструментами проверена
+`dots-studio/dots-3-note-preview:free`: она вызвала `get_dataset_schema`,
+`get_profile` и `run_procedure`, расчёт сохранился как `run_id`, ответ пришёл
+по-русски. Она и стоит по умолчанию. Часть моделей (`xingchen-agi/...`,
+`google/gemma-4-31b-it:free`) в момент проверки отвечала `429 upstream
+rate-limited` — это ограничение провайдера, а не ключ.
 
 **Важное ограничение.** Бесплатные `:free`-endpoint'ы OpenRouter часто не
 поддерживают нативный вызов инструментов: запрос с `tools` возвращает
 `404 No endpoints found that support tool use`. Поэтому при такой ошибке
 провайдер повторяет запрос **без инструментов**, а ответ помечается
 предупреждением «без расчётов»: числам из него доверять нельзя. Для реальных
-расчётов нужна модель/endpoint с поддержкой tools (например, платный вариант
-DeepSeek или VseGPT/Yandex). Отключить повтор можно
-`WINNOW_AI_TOOL_FALLBACK=0`.
+расчётов нужна модель/endpoint с поддержкой tools (dots, платный DeepSeek или
+VseGPT/Yandex). Отключить повтор можно `WINNOW_AI_TOOL_FALLBACK=0`.
 
 ## Настройки
 
@@ -129,7 +137,7 @@ DeepSeek или VseGPT/Yandex). Отключить повтор можно
 |---|---|---|
 | `WINNOW_AI_PROVIDER` | `fake`, если нет ключа; иначе `openrouter` | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
 | `WINNOW_AI_KEY` | — | ключ провайдера, только на сервере; принимаются также `OPENROUTER_API_KEY`, `WINNOW_OPENROUTER_API_KEY`, `YANDEX_API_KEY`, `VSEGPT_API_KEY`, `DEEPSEEK_API_KEY` |
-| `WINNOW_AI_MODEL` | `deepseek/deepseek-r1:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_MODEL` | `dots-studio/dots-3-note-preview:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
 | `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud (можно `YANDEX_FOLDER_ID`) |
 | `WINNOW_AI_BASE_URL` | адрес пресета | совместимый endpoint; для `custom` обязателен |
 | `WINNOW_AI_AUTH_SCHEME` | `Bearer` / `Api-Key` у Yandex | как подписывать ключ |
@@ -183,8 +191,9 @@ DeepSeek или VseGPT/Yandex). Отключить повтор можно
 - SQLite и один процесс: квота считается по сообщениям в базе, при нескольких
   воркерах нужен общий счётчик;
 - в тестах модель не вызывается: проверяется наш цикл, а не чужой API;
-- **DeepSeek R1 free часто не поддерживает tools**: при ошибке провайдер
-  повторяет запрос без инструментов, ответ помечается «без расчётов»;
+- **DeepSeek R1 free больше не обслуживается OpenRouter**; рабочая free-модель
+  по умолчанию — `dots-studio/dots-3-note-preview:free`, остальные free-модели
+  могут отвечать 429 из-за лимитов провайдера;
 - OpenRouter может быть недоступен по сети из РФ — это ограничение сети, а не
   ключа; тогда нужен VseGPT, Yandex AI Studio или локальная модель;
 - история диалогов сохраняется в базе, но экран пока не восстанавливает прошлый

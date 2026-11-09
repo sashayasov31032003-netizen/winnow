@@ -1,4 +1,4 @@
-﻿# Сборка переносимой веб-версии Winnow (Windows).
+# Сборка переносимой веб-версии Winnow (Windows).
 #
 #   powershell -ExecutionPolicy Bypass -File tools\build_web_portable.ps1
 #
@@ -77,7 +77,7 @@ AI в переносимой версии (необязательно)
 ---------------------------------------
 Ключ модели не входит в архив. Рядом лежат три запуска:
 
-  OpenRouter.cmd   ключ OpenRouter, модель deepseek/deepseek-r1:free
+  OpenRouter.cmd   ключ OpenRouter, модель dots-studio/dots-3-note-preview:free
   VseGPT.cmd       ключ VseGPT, модель openai/gpt-4o-mini (работает из РФ)
   Ollama.cmd       локальный Ollama, без ключа (нужен ollama pull qwen3:8b)
 
@@ -115,7 +115,7 @@ if "%OPENROUTER_API_KEY%"=="" (
   exit /b 1
 )
 set "WINNOW_AI_PROVIDER=openrouter"
-set "WINNOW_AI_MODEL=deepseek/deepseek-r1:free"
+set "WINNOW_AI_MODEL=dots-studio/dots-3-note-preview:free"
 set "WINNOW_AI_KEY=%OPENROUTER_API_KEY%"
 Winnow-web.exe
 '@

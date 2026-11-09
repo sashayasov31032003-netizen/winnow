@@ -272,7 +272,7 @@ python -m pytest -q                                    # 438 тестов дви
 | `WINNOW_CORS` | адреса Vite | откуда фронтенду разрешено обращаться |
 | `WINNOW_AI_PROVIDER` | `fake` без ключа | `fake`, `yandex`, `vsegpt`, `ollama`, `deepseek`, `openrouter`, `custom` |
 | `WINNOW_AI_KEY` | — | ключ модели, **только на сервере** (также `OPENROUTER_API_KEY`, `WINNOW_OPENROUTER_API_KEY`, `YANDEX_API_KEY`, `VSEGPT_API_KEY`) |
-| `WINNOW_AI_MODEL` | `deepseek/deepseek-r1:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
+| `WINNOW_AI_MODEL` | `dots-studio/dots-3-note-preview:free` у OpenRouter | модель; для Yandex — `gpt://<каталог>/<модель>/latest` |
 | `WINNOW_AI_FOLDER_ID` | — | каталог Yandex Cloud |
 | `WINNOW_AI_BASE_URL`, `WINNOW_AI_AUTH_SCHEME` | по пресету | адрес и схема авторизации (`Bearer` / `Api-Key`) |
 | `WINNOW_AI_TOOL_FALLBACK` | `1` | повтор без tools, если модель их не умеет (ответ без расчётов) |
@@ -287,14 +287,14 @@ python -m pytest -q                                    # 438 тестов дви
 примеры — в `docs/research-intelligence.md`.
 
 Для запуска с моделью есть готовые файлы: `web\run-vsegpt.cmd` (спросит ключ и
-не сохранит его), `web\run-openrouter.cmd` (то же для R1) и
+не сохранит его), `web\run-openrouter.cmd` (то же для OpenRouter) и
 `web\run-ollama.cmd` (локально, без ключа).
 
-**OpenRouter и DeepSeek R1.** В `run-openrouter.cmd` модель —
-`deepseek/deepseek-r1:free`. Бесплатные endpoint'ы OpenRouter часто не
-поддерживают `tools`; тогда сервер повторяет запрос без инструментов и
-предупреждает, что ответ без расчётов. Для расчётов нужен endpoint с tools
-(платный DeepSeek, VseGPT или Yandex).
+**OpenRouter.** В `run-openrouter.cmd` модель —
+`dots-studio/dots-3-note-preview:free`: она поддерживает tools.
+`deepseek/deepseek-r1:free` OpenRouter больше не обслуживает (404 «no provider
+serves this model»). Если endpoint не поддерживает `tools`, сервер повторяет
+запрос без инструментов и предупреждает, что ответ без расчётов.
 
 ## Оформление
 

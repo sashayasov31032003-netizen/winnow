@@ -463,6 +463,7 @@ def test_openrouter_key_accepts_plain_env_name(monkeypatch):
     assert settings.provider == "openrouter"
     assert settings.api_key == "sk-or-secret"
     assert settings.enabled is True
+    assert settings.model == "dots-studio/dots-3-note-preview:free"
 
 
 def test_model_without_tools_falls_back_to_text():
