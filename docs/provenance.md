@@ -32,7 +32,7 @@ Office, GIMP рядом с Photoshop, а PSPP, JASP и jamovi — рядом с�
 | Советчик и объяснения | `src/winnow/stats/advisor.py`, `stats/interpretation.py` | подбор исследований по данным и текст «простыми словами» |
 | Опросы | `src/winnow/web/surveys.py`, `web/survey_dataset.py` | конструктор, приём ответов, превращение в набор |
 | Знак и фавикон | `assets/winnow.ico`, `web/frontend/public/favicon.svg` | нарисованы для проекта |
-| Тесты | `tests/`, `web/tests/` | 434 теста движка и 89 тестов API |
+| Тесты | `tests/`, `web/tests/` | 438 тестов движка и 121 тест API, ИИ и качества |
 
 ## Источники знаний (не кода)
 
