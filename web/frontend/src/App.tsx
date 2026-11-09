@@ -291,6 +291,12 @@ function Workspace({
     }
   }
 
+  function setMode(expert: boolean) {
+    setAdvanced(expert);
+    // Режим — личная настройка человека, а не данных: запоминаем в браузере.
+    window.localStorage.setItem("winnow.mode", expert ? "expert" : "simple");
+  }
+
   return (
     <div className={`shell${collapsed ? " collapsed" : ""}`}>
       <aside className="sidebar">
@@ -462,6 +468,41 @@ function Workspace({
               Создать приглашение
             </button>
           )}
+
+          {/* Звёздочка без подписи не говорила, что делает. Теперь это явный
+              переключатель с названиями режимов и пояснением, что скрывается. */}
+          <div className="mode-switch" role="group" aria-label="Режим интерфейса">
+            <div className="mode-switch-head">
+              <span className="mode-switch-title">Режим работы</span>
+              <span className="mode-switch-current">
+                {advanced ? "Экспертный" : "Простой"}
+              </span>
+            </div>
+            <div className="mode-switch-options">
+              <button
+                type="button"
+                className={advanced ? "" : "active"}
+                aria-pressed={!advanced}
+                onClick={() => setMode(false)}
+              >
+                <span className="mode-name">Простой</span>
+                <span className="mode-sub">только главное</span>
+              </button>
+              <button
+                type="button"
+                className={advanced ? "active" : ""}
+                aria-pressed={advanced}
+                onClick={() => setMode(true)}
+              >
+                <span className="mode-name">Экспертный</span>
+                <span className="mode-sub">все инструменты</span>
+              </button>
+            </div>
+            <p className="mode-switch-hint">
+              Простой скрывает процедуры и графики. Экспертный показывает всё.
+            </p>
+          </div>
+
           <p className="sidebar-user" title={user.email}>
             {user.email}
           </p>
@@ -474,19 +515,6 @@ function Workspace({
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
               {theme === "dark" ? "☀" : "☾"}
-            </button>
-            <button
-              type="button"
-              className="ghost icon-button"
-              title={advanced ? "Простой режим" : "Экспертный режим"}
-              aria-label={advanced ? "Простой режим" : "Экспертный режим"}
-              onClick={() => {
-                const next = !advanced;
-                setAdvanced(next);
-                window.localStorage.setItem("winnow.mode", next ? "expert" : "simple");
-              }}
-            >
-              {advanced ? "★" : "☆"}
             </button>
             <button type="button" className="ghost logout" onClick={onLogout}>
               Выйти
