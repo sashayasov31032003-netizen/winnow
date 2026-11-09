@@ -188,6 +188,38 @@ def test_boxplot_chart_data():
     assert data.boxes[0]["median"] == pytest.approx(5.5, abs=1e-9)
 
 
+def test_boxplot_groups_by_category():
+    """С выбранной категорией должен быть ящик на каждую группу."""
+    dataset = _dataset()
+    data = build_chart_data(
+        ChartCommand(dataset=dataset, kind="boxplot", variables=["x"], category="group")
+    )
+    assert [box["label"] for box in data.boxes] == ["1", "2", "3"]
+    assert [box["n"] for box in data.boxes] == [2, 3, 5]
+    # Группа 1: x = 1,2 -> медиана 1,5; группа 2: 3,4,5 -> 4; группа 3: 6..10 -> 8.
+    assert data.boxes[0]["median"] == pytest.approx(1.5)
+    assert data.boxes[1]["median"] == pytest.approx(4.0)
+    assert data.boxes[2]["median"] == pytest.approx(8.0)
+    assert "групп: 3" in chart_caption(data)
+    assert "BY group" in ChartCommand(
+        dataset=dataset, kind="boxplot", variables=["x"], category="group"
+    ).syntax()
+
+
+def test_boxplot_grouping_ignores_missing_category_values():
+    dataset = Dataset.from_records(
+        {
+            "value": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "group": ["a", "a", "b", None, "b", "a"],
+        }
+    )
+    data = build_chart_data(
+        ChartCommand(dataset=dataset, kind="boxplot", variables=["value"], category="group")
+    )
+    assert [box["label"] for box in data.boxes] == ["a", "b"]
+    assert all(box["n"] > 0 for box in data.boxes)
+
+
 def test_scatter_chart_data_has_perfect_correlation():
     """y = 2x: корреляция должна быть ровно 1."""
     dataset = _dataset()
@@ -242,6 +274,20 @@ def test_chart_command_rejects_one_variable_for_scatter():
     dataset = _dataset()
     with pytest.raises(CommandError):
         ChartCommand(dataset=dataset, kind="scatter", variables=["x"]).execute()
+
+
+def test_bar_chart_does_not_require_numeric_variable():
+    """Столбцам нужна только категория: переменная в форме была лишней."""
+    dataset = demo_dataset(n=40, seed=2)
+    data = build_chart_data(ChartCommand(dataset=dataset, kind="bar", category="gender"))
+    assert sum(data.values) == data.n
+    assert data.categories
+
+
+def test_pie_chart_does_not_require_numeric_variable():
+    dataset = demo_dataset(n=40, seed=2)
+    data = build_chart_data(ChartCommand(dataset=dataset, kind="pie", category="city"))
+    assert sum(data.percents) == pytest.approx(100.0, abs=1e-6)
 
 
 def test_chart_command_requires_category_for_bar():

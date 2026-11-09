@@ -878,7 +878,7 @@ DIALOG_SPECS: dict[str, DialogSpec] = {
             ),
             FieldSpec("variables", "Переменные:", FieldKind.VARIABLE_LIST,
                       VarFilter.ANY, row=1, column=0),
-            FieldSpec("category", "Категории (для столбцов, круга, линии):",
+            FieldSpec("category", "Категории (для ящика, столбцов, круга, линии):",
                       FieldKind.SINGLE_VARIABLE, VarFilter.CATEGORICAL, row=2, column=0),
             FieldSpec("bins", "Интервалов (0 - автоматически):", FieldKind.NUMBER,
                       default=0.0, row=3, column=0, minimum=0, maximum=100, step=1,

@@ -89,16 +89,48 @@ export function ChartView({
     );
   }
 
+  const kind = String(values.kind ?? "histogram");
+
+  // Показываем только поля, которые этот вид графика действительно использует.
+  // Иначе человек выбирает «Категории» для гистограммы, а они ни на что не влияют.
+  const fields = schema.fields.filter((field) => {
+    if (field.name === "variables") return !["bar", "pie"].includes(kind);
+    if (field.name === "category") {
+      return ["boxplot", "bar", "pie", "line"].includes(kind);
+    }
+    if (field.name === "bins" || field.name === "show_normal" || field.name === "show_mean") {
+      return kind === "histogram";
+    }
+    return true;
+  });
+
+  function change(name: string, next: unknown) {
+    setValues((current) => {
+      const updated: Record<string, unknown> = { ...current, [name]: next };
+      if (name === "kind") {
+        const chosen = String(next);
+        if (["bar", "pie"].includes(chosen)) updated.variables = [];
+        if (!["boxplot", "bar", "pie", "line"].includes(chosen)) updated.category = "";
+        if (chosen !== "histogram") {
+          updated.bins = 0;
+          updated.show_normal = false;
+          updated.show_mean = true;
+        }
+      }
+      return updated;
+    });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 880 }}>
       <form className="card" style={{ padding: 16 }} onSubmit={build}>
-        {schema.fields.map((field) => (
+        {fields.map((field) => (
           <Field
             key={field.name}
             field={field}
             value={values[field.name]}
             candidates={candidatesFor(field, variables)}
-            onChange={(next) => setValues((current) => ({ ...current, [field.name]: next }))}
+            onChange={(next) => change(field.name, next)}
           />
         ))}
         {error && (

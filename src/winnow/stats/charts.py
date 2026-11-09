@@ -57,13 +57,26 @@ class ChartCommand(Command):
     def validate(self) -> None:
         if self.dataset is None:
             raise CommandError("Команда не связана с набором данных")
+        if self.kind not in CHART_KEYS:
+            raise CommandError(f"Неизвестный вид графика: {self.kind!r}")
+
+        # Круговой и столбчатой диаграммам нужна только категория: они показывают
+        # частоты, а не значения числовой переменной. Раньше здесь требовалась
+        # ещё и переменная, которую движок всё равно не использовал.
+        if self.kind in ("bar", "pie"):
+            if not self.category:
+                raise CommandError("Выберите переменную для категорий")
+            if self.category not in self.dataset.variables:
+                raise CommandError(f"Переменная не найдена: {self.category}")
+            if self.bins < 0:
+                raise CommandError("Число интервалов не может быть отрицательным")
+            return
+
         if not self.variables:
             raise CommandError("Выберите хотя бы одну переменную")
         for name in self.variables:
             if name not in self.dataset.variables:
                 raise CommandError(f"Переменная не найдена: {name}")
-        if self.kind not in CHART_KEYS:
-            raise CommandError(f"Неизвестный вид графика: {self.kind!r}")
 
         if self.kind in ("histogram", "boxplot") and len(self.variables) > 1:
             # Гистограмма и ящик показывают распределение; несколько переменных
@@ -71,18 +84,24 @@ class ChartCommand(Command):
             raise CommandError(
                 f"График «{CHART_TITLES[self.kind]}» строится по одной переменной"
             )
-        if self.kind in ("histogram", "boxplot"):
-            if not self.dataset.var(self.variables[0]).is_numeric:
-                raise CommandError("Для этого графика нужна числовая переменная")
+        if self.kind in ("histogram", "boxplot") and not self.dataset.var(
+            self.variables[0]
+        ).is_numeric:
+            raise CommandError("Для этого графика нужна числовая переменная")
         if self.kind == "scatter" and len(self.variables) < 2:
             raise CommandError("Для диаграммы рассеяния нужны две переменные: X и Y")
-        if self.kind in ("bar", "pie", "line"):
+        if self.kind == "line":
             if not self.category:
                 raise CommandError("Выберите переменную для категорий")
             if self.category not in self.dataset.variables:
                 raise CommandError(f"Переменная не найдена: {self.category}")
-        if self.kind == "line" and not self.variables:
-            raise CommandError("Для линии средних нужна числовая переменная")
+            if not self.dataset.var(self.variables[0]).is_numeric:
+                raise CommandError("Для линии средних нужна числовая переменная")
+        # Для ящика категория необязательна: без неё один ящик, с ней — по
+        # ящику на группу. Это то, чего ждёт человек, выбирая «Категории».
+        if self.kind == "boxplot" and self.category:
+            if self.category not in self.dataset.variables:
+                raise CommandError(f"Переменная не найдена: {self.category}")
         if self.bins < 0:
             raise CommandError("Число интервалов не может быть отрицательным")
 
@@ -97,7 +116,7 @@ class ChartCommand(Command):
             return (
                 "GRAPH\n"
                 f"  /BOXPLOT={self.variables[0]}"
-                + (f" BY {self.group_by}" if self.group_by else "")
+                + (f" BY {self.category}" if self.category else "")
                 + "\n  /MISSING=LISTWISE."
             )
         if self.kind == "scatter":
@@ -318,6 +337,36 @@ def build_chart_data(command: ChartCommand) -> ChartData:
 
     if command.kind == "boxplot":
         name = command.variables[0]
+        if command.category:
+            # Ящик по группам: одна категория — один ящик. Без этого поле
+            # «Категории» в форме выглядело бы неработающим.
+            frame = dataset.analysis_frame([name, command.category]).dropna()
+            values = pd.to_numeric(frame[name], errors="coerce")
+            labels = frame[command.category].map(
+                lambda value: dataset.var(command.category).label_for(value)
+            )
+            working = pd.DataFrame({"value": values, "group": labels}).dropna()
+            boxes: list[dict[str, Any]] = []
+            outliers: list[float] = []
+            for group, subset in working.groupby("group", sort=False):
+                statistics = box_statistics(subset["value"].to_numpy(dtype=float))
+                if not statistics:
+                    continue
+                statistics["label"] = str(group)
+                statistics["name"] = str(group)
+                boxes.append(statistics)
+                outliers.extend(float(value) for value in statistics["outliers"])
+            data = ChartData(
+                kind="boxplot",
+                title=title,
+                x_label=command.x_label or dataset.var(command.category).display_name,
+                y_label=command.y_label or dataset.var(name).display_name,
+                boxes=boxes,
+                outliers=outliers,
+                n=int(len(working)),
+            )
+            return data
+
         values = _numeric(dataset, name).to_numpy()
         statistics = box_statistics(values)
         if not statistics:
@@ -414,11 +463,12 @@ def chart_caption(data: ChartData) -> str:
             parts.append(f"медиана: {data.median_value:.3f}")
         return "; ".join(parts)
     if data.kind == "boxplot" and data.boxes:
-        box = data.boxes[0]
-        return (
-            f"N = {box['n']}; медиана: {box['median']:.3f}; "
-            f"выбросов: {len(data.outliers)}"
-        )
+        total = sum(int(box.get("n", 0)) for box in data.boxes)
+        parts = [f"N = {total}"]
+        if len(data.boxes) > 1:
+            parts.append(f"групп: {len(data.boxes)}")
+        parts.append(f"выбросов: {len(data.outliers)}")
+        return "; ".join(parts)
     if data.kind == "scatter":
         parts = [f"N = {data.n}"]
         if data.correlation is not None:
@@ -477,6 +527,39 @@ def _data_table(data: ChartData, command: ChartCommand) -> Table:
         return table
 
     if data.kind == "boxplot":
+        if len(data.boxes) > 1 or any(box.get("label") for box in data.boxes):
+            table = Table(
+                title=f"Статистики ящика с усами: {data.x_label}",
+                columns=[
+                    Column("Группа", align="left", is_metric=False),
+                    Column("N", decimals=0),
+                    Column("Q1", decimals=3),
+                    Column("Медиана", decimals=3),
+                    Column("Q3", decimals=3),
+                    Column("Минимум", decimals=3),
+                    Column("Максимум", decimals=3),
+                    Column("Выбросов", decimals=0),
+                ],
+                footnotes=[
+                    "Усы доходят до крайних значений внутри 1.5 межквартильных "
+                    "размаха от квартилей; всё дальше считается выбросами."
+                ],
+            )
+            for box in data.boxes:
+                table.add_row(
+                    [
+                        box.get("label") or box.get("name") or "Все наблюдения",
+                        float(box["n"]),
+                        box["q1"],
+                        box["median"],
+                        box["q3"],
+                        box["minimum"],
+                        box["maximum"],
+                        float(len(box.get("outliers", []))),
+                    ]
+                )
+            return table
+
         table = Table(
             title=f"Статистики ящика с усами: {data.x_label}",
             columns=[

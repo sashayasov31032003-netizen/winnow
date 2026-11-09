@@ -561,6 +561,44 @@ def test_charts_list_and_svg(client):
     assert "N = 15" in payload["caption"]
 
 
+def test_boxplot_groups_by_category(client):
+    """Категория у ящика должна давать подписи групп, а не игнорироваться."""
+    _register(client, "user@example.com")
+    dataset_id = _upload(client).json()["id"]
+    response = client.post(
+        f"/api/datasets/{dataset_id}/chart",
+        json={
+            "values": {
+                "kind": "boxplot",
+                "variables": ["2. Возраст"],
+                "category": "1. Ваш пол",
+                "title": "",
+            }
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert "Мужской" in payload["svg"]
+    assert "Женский" in payload["svg"]
+    assert "групп: 2" in payload["caption"]
+
+
+def test_bar_chart_needs_only_category(client):
+    _register(client, "user@example.com")
+    dataset_id = _upload(client).json()["id"]
+    response = client.post(
+        f"/api/datasets/{dataset_id}/chart",
+        json={
+            "values": {
+                "kind": "bar",
+                "variables": [],
+                "category": "1. Ваш пол",
+            }
+        },
+    )
+    assert response.status_code == 200, response.text
+
+
 def test_chart_without_variables_is_reported(client):
     _register(client, "user@example.com")
     dataset_id = _upload(client).json()["id"]
