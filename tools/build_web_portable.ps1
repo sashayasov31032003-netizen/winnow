@@ -1,4 +1,4 @@
-# Сборка переносимой веб-версии Winnow (Windows).
+﻿# Сборка переносимой веб-версии Winnow (Windows).
 #
 #   powershell -ExecutionPolicy Bypass -File tools\build_web_portable.ps1
 #
@@ -86,7 +86,9 @@ AI в переносимой версии (необязательно)
 
 OpenRouter из России часто отвечает "403 Access denied by security policy".
 Это блокировка сети или региона, а не ключ: ключ не поможет, нужен VPN/прокси
-либо запуск через VseGPT.cmd или Ollama.cmd.
+либо запуск через VseGPT.cmd или Ollama.cmd. Бывает, что VPN покрывает только
+браузер или Python, но не Winnow-web.exe (split tunneling): добавьте exe в VPN
+или используйте VseGPT/Ollama. DeepSeek R1 free OpenRouter больше не обслуживает.
 
 Если Windows пишет "Could not create temporary directory"
 ---------------------------------------------------------

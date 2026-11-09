@@ -337,7 +337,9 @@ powershell -ExecutionPolicy Bypass -File tools\build_web_portable.ps1
 В архиве рядом с exe лежат `OpenRouter.cmd`, `VseGPT.cmd` и `Ollama.cmd`: они
 спрашивают ключ (кроме Ollama) и не сохраняют его. OpenRouter из России часто
 отвечает `403 Access denied by security policy` — это блокировка сети/региона,
-а не ключ; в этом случае используйте VseGPT или Ollama.
+а не ключ; в этом случае используйте VseGPT или Ollama. Если VPN работает в
+браузере/Python, но не в exe, добавьте `Winnow-web.exe` в VPN или запускайте
+VseGPT/Ollama.
 
 Данные (база, опросы, ответы, наборы) лежат в папке `web\` рядом с exe, поэтому
 переносить нужно папку целиком. Настройки — те же `WINNOW_*`, что и у обычного
