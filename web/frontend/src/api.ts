@@ -318,6 +318,30 @@ export type StressFinding = {
   source: string;
 };
 
+export type StressChallengeCheck = {
+  id: string;
+  title: string;
+  status: "supported" | "weakens" | "contradicts" | "not_tested";
+  b: number | null;
+  p: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  significant: boolean | null;
+  note: string;
+  details: Record<string, unknown>[];
+};
+
+export type StressChallenge = {
+  hypothesis: string;
+  focal: string;
+  direction: "positive" | "negative";
+  controls: string[];
+  status: "supported" | "fragile" | "contradicted" | "insufficient";
+  summary: string;
+  checks: StressChallengeCheck[];
+  findings: StressFinding[];
+};
+
 export type StressReport = {
   run_id: number | null;
   target: string;
@@ -331,6 +355,7 @@ export type StressReport = {
   robust: Record<string, StressCoefficient[]>;
   scenarios: StressScenario[];
   bootstrap: StressBootstrap | null;
+  challenge: StressChallenge | null;
   findings: StressFinding[];
   methodology: Record<string, unknown>;
 };
@@ -345,6 +370,12 @@ export type StressRequest = {
   confidence: number;
   alpha: number;
   add_controls: string[];
+  challenge: {
+    hypothesis: string;
+    focal: string;
+    direction: "positive" | "negative";
+    controls: string[];
+  } | null;
 };
 
 export type AIRunSummary = {

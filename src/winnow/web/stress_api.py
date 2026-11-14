@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ from winnow.analysis.stress import (
     DEFAULT_BOOTSTRAP,
     DEFAULT_SEED,
     MAX_BOOTSTRAP,
+    ChallengeConfig,
     StressConfig,
     run_stress_test,
 )
@@ -23,6 +24,15 @@ from winnow.web.runs import get_run, save_run
 from winnow.web.security import current_user
 
 router = APIRouter(prefix="/api")
+
+
+class ChallengeRequest(BaseModel):
+    """Исследовательская гипотеза для Research Challenge."""
+
+    hypothesis: str
+    focal: str
+    direction: Literal["positive", "negative"] = "positive"
+    controls: list[str] = Field(default_factory=list)
 
 
 class StressRequest(BaseModel):
@@ -37,6 +47,7 @@ class StressRequest(BaseModel):
     confidence: float = 0.95
     alpha: float = 0.05
     add_controls: list[str] = Field(default_factory=list)
+    challenge: ChallengeRequest | None = None
 
 
 @router.post("/datasets/{dataset_id}/stress-test")
@@ -77,6 +88,19 @@ def stress_test(
             status_code=422,
             detail="Выберите хотя бы одну проверку или включите авто-режим",
         )
+    challenge = None
+    if payload.challenge is not None:
+        if len(payload.challenge.controls) > 20:
+            raise HTTPException(
+                status_code=422,
+                detail="Слишком много контрольных переменных гипотезы",
+            )
+        challenge = ChallengeConfig(
+            hypothesis=payload.challenge.hypothesis,
+            focal=payload.challenge.focal,
+            direction=payload.challenge.direction,
+            controls=tuple(payload.challenge.controls),
+        )
     config = StressConfig(
         target=payload.target.strip(),
         predictors=tuple(payload.predictors),
@@ -87,6 +111,7 @@ def stress_test(
         alpha=payload.alpha,
         add_controls=tuple(payload.add_controls),
         auto=payload.auto,
+        challenge=challenge,
     )
 
     row = _owned(dataset_id, user, db)

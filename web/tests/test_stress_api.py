@@ -130,6 +130,52 @@ def test_stress_test_rejects_bad_target_and_checks(client):
     assert too_many.status_code == 422
 
 
+def test_stress_challenge_is_saved_with_report(client):
+    _register(client)
+    dataset_id = _upload(client)
+    payload = _payload(
+        challenge={
+            "hypothesis": "x1 положительно связан с y",
+            "focal": "x1",
+            "direction": "positive",
+            "controls": ["control"],
+        }
+    )
+    response = client.post(f"/api/datasets/{dataset_id}/stress-test", json=payload)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    report = body["report"]
+    assert report["challenge"] is not None
+    assert report["challenge"]["focal"] == "x1"
+    assert report["challenge"]["status"] in {
+        "supported",
+        "fragile",
+        "contradicted",
+        "insufficient",
+    }
+    assert report["challenge"]["checks"]
+
+    run = client.get(f"/api/stress-tests/{body['run_id']}").json()["run"]
+    assert run["params"]["challenge"]["hypothesis"].startswith("x1")
+
+
+def test_bad_challenge_focal_returns_422(client):
+    _register(client)
+    dataset_id = _upload(client)
+    response = client.post(
+        f"/api/datasets/{dataset_id}/stress-test",
+        json=_payload(
+            challenge={
+                "hypothesis": "Нет такого предиктора",
+                "focal": "control",
+                "direction": "positive",
+                "controls": [],
+            }
+        ),
+    )
+    assert response.status_code == 422
+
+
 def test_other_user_cannot_read_stress_test(client):
     _register(client, "first@example.com")
     dataset_id = _upload(client)

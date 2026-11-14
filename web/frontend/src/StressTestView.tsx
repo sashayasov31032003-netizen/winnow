@@ -3,6 +3,7 @@ import {
   api,
   ApiError,
   type DatasetDetail,
+  type StressChallenge,
   type StressReport,
   type StressScenario,
 } from "./api";
@@ -11,7 +12,7 @@ import {
 // предпосылок, спецификации и случайной выборки. Все числа приходят с сервера;
 // интерфейс ничего не досчитывает и не меняет данные.
 
-type Section = "overview" | "diagnostics" | "comparison" | "sensitivity" | "methodology";
+type Section = "overview" | "diagnostics" | "comparison" | "sensitivity" | "challenge" | "methodology";
 
 const CHECKS: { id: string; title: string; hint: string }[] = [
   {
@@ -46,7 +47,22 @@ const SECTION_TITLES: Record<Section, string> = {
   diagnostics: "Диагностика",
   comparison: "Сравнение",
   sensitivity: "Чувствительность",
+  challenge: "Challenge",
   methodology: "Методология",
+};
+
+const CHALLENGE_STATUS: Record<string, string> = {
+  supported: "сохраняется",
+  fragile: "частично",
+  contradicted: "противоречит",
+  insufficient: "недостаточно данных",
+};
+
+const CHALLENGE_CHECK_STATUS: Record<string, string> = {
+  supported: "сохраняется",
+  weakens: "ослабевает",
+  contradicts: "противоречит",
+  not_tested: "не проверено",
 };
 
 const CHECK_TITLES: Record<string, string> = {
@@ -101,6 +117,11 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
   const [target, setTarget] = useState("");
   const [predictors, setPredictors] = useState<string[]>([]);
   const [controls, setControls] = useState<string[]>([]);
+  const [challengeOn, setChallengeOn] = useState(false);
+  const [hypothesis, setHypothesis] = useState("");
+  const [focal, setFocal] = useState("");
+  const [direction, setDirection] = useState<"positive" | "negative">("positive");
+  const [challengeControls, setChallengeControls] = useState<string[]>([]);
   const [auto, setAuto] = useState(true);
   const [checks, setChecks] = useState<string[]>(CHECKS.map((item) => item.id));
   const [bootstrap, setBootstrap] = useState(500);
@@ -119,6 +140,10 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
     setTarget("");
     setPredictors([]);
     setControls([]);
+    setChallengeOn(false);
+    setHypothesis("");
+    setFocal("");
+    setChallengeControls([]);
     setReport(null);
     setError("");
     api
@@ -147,12 +172,26 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
     () => numeric.filter((item) => item.name !== target && !predictors.includes(item.name)),
     [numeric, predictors, target],
   );
+  const challengeFocal = predictors.includes(focal) ? focal : predictors[0] ?? "";
+  const challengeControlList = useMemo(
+    () =>
+      numeric.filter(
+        (item) =>
+          item.name !== target &&
+          item.name !== challengeFocal &&
+          !predictors.includes(item.name),
+      ),
+    [challengeFocal, numeric, predictors, target],
+  );
 
   function chooseTarget(name: string) {
     setTarget(name);
     const candidates = (scale.length ? scale : numeric).filter((item) => item.name !== name);
-    setPredictors(candidates.slice(0, 4).map((item) => item.name));
+    const names = candidates.slice(0, 4).map((item) => item.name);
+    setPredictors(names);
+    setFocal(names[0] ?? "");
     setControls([]);
+    setChallengeControls([]);
     setReport(null);
   }
 
@@ -174,6 +213,16 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
       setError("Выберите хотя бы одну проверку");
       return;
     }
+    if (challengeOn) {
+      if (!hypothesis.trim()) {
+        setError("Сформулируйте гипотезу для Research Challenge");
+        return;
+      }
+      if (!challengeFocal) {
+        setError("Выберите фокус-предиктор гипотезы");
+        return;
+      }
+    }
     setBusy(true);
     try {
       const response = await api.stressTest(datasetId, {
@@ -186,6 +235,16 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
         confidence,
         alpha: 0.05,
         add_controls: controls,
+        challenge: challengeOn
+          ? {
+              hypothesis: hypothesis.trim(),
+              focal: challengeFocal,
+              direction,
+              controls: challengeControls.filter(
+                (name) => name !== challengeFocal && !predictors.includes(name),
+              ),
+            }
+          : null,
       });
       setReport(response.report);
       setSection("overview");
@@ -342,6 +401,68 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
           )}
         </div>
 
+        <div className="stress-challenge-form">
+          <label className="stress-auto">
+            <input
+              type="checkbox"
+              checked={challengeOn}
+              onChange={(event) => setChallengeOn(event.target.checked)}
+            />
+            Research Challenge: проверить гипотезу
+          </label>
+          {challengeOn && (
+            <div className="stress-challenge-fields">
+              <label>
+                <span>Гипотеза</span>
+                <textarea
+                  rows={2}
+                  value={hypothesis}
+                  onChange={(event) => setHypothesis(event.target.value)}
+                  placeholder="Например: уровень образования положительно связан с доходом"
+                />
+              </label>
+              <div className="stress-form-grid challenge-grid">
+                <label>
+                  <span>Фокус-предиктор</span>
+                  <select value={challengeFocal} onChange={(event) => setFocal(event.target.value)}>
+                    {predictors.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Ожидаемое направление</span>
+                  <select
+                    value={direction}
+                    onChange={(event) => setDirection(event.target.value as "positive" | "negative")}
+                  >
+                    <option value="positive">положительное (+)</option>
+                    <option value="negative">отрицательное (−)</option>
+                  </select>
+                </label>
+              </div>
+              <div>
+                <span className="muted small">Контрольные переменные для гипотезы</span>
+                <div className="stress-chips" style={{ marginTop: 6 }}>
+                  {challengeControlList.map((item) => (
+                    <label key={item.name} className={`stress-chip${challengeControls.includes(item.name) ? " active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={challengeControls.includes(item.name)}
+                        onChange={() => setChallengeControls((current) => toggle(current, item.name))}
+                      />
+                      {item.display}
+                    </label>
+                  ))}
+                  {!challengeControlList.length && (
+                    <span className="muted small">Нет свободных числовых переменных</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="stress-actions">
           <button type="button" onClick={() => void run()} disabled={busy || !target || !predictors.length}>
             {busy ? "Считаем…" : "Запустить Stress Test"}
@@ -382,23 +503,26 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
           </div>
 
           <nav className="stress-sections" aria-label="Разделы Stress Test">
-            {(Object.keys(SECTION_TITLES) as Section[]).map((key) => (
-              <button
-                key={key}
-                type="button"
-                className={section === key ? "active" : ""}
-                aria-pressed={section === key}
-                onClick={() => setSection(key)}
-              >
-                {SECTION_TITLES[key]}
-              </button>
-            ))}
+            {(Object.keys(SECTION_TITLES) as Section[])
+              .filter((key) => key !== "challenge" || report.challenge)
+              .map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={section === key ? "active" : ""}
+                  aria-pressed={section === key}
+                  onClick={() => setSection(key)}
+                >
+                  {SECTION_TITLES[key]}
+                </button>
+              ))}
           </nav>
 
           {section === "overview" && <Overview report={report} />}
           {section === "diagnostics" && <Diagnostics report={report} />}
           {section === "comparison" && <Comparison report={report} />}
           {section === "sensitivity" && <Sensitivity report={report} />}
+          {section === "challenge" && report.challenge && <Challenge report={report.challenge} />}
           {section === "methodology" && <Methodology report={report} />}
         </>
       )}
@@ -462,6 +586,18 @@ function Overview({ report }: { report: StressReport }) {
           устойчивости, а не доказательство причинности.
         </p>
       </div>
+
+      {report.challenge && (
+        <div className="card stress-card challenge-banner">
+          <div>
+            <span className="muted small">Research Challenge</span>
+            <strong>{report.challenge.hypothesis}</strong>
+          </div>
+          <span className={`challenge-status ${report.challenge.status}`}>
+            {CHALLENGE_STATUS[report.challenge.status] ?? report.challenge.status}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -705,6 +841,63 @@ function Histogram({ name, counts }: { name: string; counts: number[] }) {
     </div>
   );
 }
+
+function Challenge({ report }: { report: StressChallenge }) {
+  return (
+    <div className="stress-challenge">
+      <div className="card stress-card challenge-head">
+        <div>
+          <span className="eyebrow">Research Challenge</span>
+          <h3>{report.hypothesis}</h3>
+          <p className="muted small">
+            {report.focal} · ожидаемое направление:{" "}
+            {report.direction === "positive" ? "положительное" : "отрицательное"}
+            {report.controls.length ? ` · контроль: ${report.controls.join(", ")}` : " · без контроля"}
+          </p>
+        </div>
+        <span className={`challenge-status ${report.status}`}>
+          {CHALLENGE_STATUS[report.status] ?? report.status}
+        </span>
+      </div>
+
+      <div className="card stress-card">
+        <h3>Вывод</h3>
+        <p className="muted">{report.summary}</p>
+      </div>
+
+      <div className="card stress-card">
+        <h3>Проверки гипотезы</h3>
+        <table className="stress-table compact">
+          <thead>
+            <tr><th>Проверка</th><th>Статус</th><th>b</th><th>p</th><th>Комментарий</th></tr>
+          </thead>
+          <tbody>
+            {report.checks.map((item) => (
+              <tr key={item.id}>
+                <td>{item.title}</td>
+                <td>
+                  <span className={`challenge-check-status ${item.status}`}>
+                    {CHALLENGE_CHECK_STATUS[item.status] ?? item.status}
+                  </span>
+                </td>
+                <td>{fmt(item.b)}</td>
+                <td>{pfmt(item.p)}</td>
+                <td className="challenge-note">{item.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="muted small">
+        Research Challenge проверяет, сохраняется ли направление связи в
+        альтернативных расчётах. Он не доказывает причинность и не заменяет
+        пререгистрацию гипотезы.
+      </p>
+    </div>
+  );
+}
+
 
 function Methodology({ report }: { report: StressReport }) {
   const limitations = Array.isArray(report.methodology.limitations)

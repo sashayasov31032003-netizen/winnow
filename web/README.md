@@ -108,7 +108,7 @@ web/frontend/             React + TypeScript + Vite
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (130)
+web/tests/                тесты API, ИИ и качества (132)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -215,7 +215,10 @@ web/run.cmd, open.cmd     запуск и открытие
   с параметрами, seed и `dataset_revision`; `GET /api/stress-tests/{id}` отдаёт
   сохранённый отчёт;
 * в интерфейсе есть **Обзор**, **Диагностика**, **Сравнение**,
-  **Чувствительность**, **Методология**; Research Challenge — следующая фаза;
+  **Чувствительность**, **Challenge** и **Методология**;
+* **Research Challenge**: гипотеза, фокус-предиктор, ожидаемое направление и
+  контрольные переменные; статусы по baseline, HC3, влиянию, контролям,
+  спецификациям и Bootstrap;
 * если модель не оценивается (мало наблюдений, коллинеарность), API отвечает
   422 с причиной, а не пустым отчётом.
 
@@ -277,8 +280,8 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 130 тестов API, ИИ и качества
-python -m pytest -q                                    # 447 тестов движка
+web\.venv\Scripts\python -m pytest web\tests -q     # 132 теста API, ИИ и качества
+python -m pytest -q                                    # 450 тестов движка
 ```
 
 ## Настройки

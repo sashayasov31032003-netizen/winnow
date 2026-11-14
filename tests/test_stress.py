@@ -16,6 +16,7 @@ from winnow.analysis.diagnostics import (
 )
 from winnow.analysis.stress import (
     DEFAULT_BOOTSTRAP,
+    ChallengeConfig,
     StressConfig,
     run_stress_test,
     suggest_checks,
@@ -29,7 +30,7 @@ def _dataset(n: int = 70, seed: int = 2026) -> tuple[Dataset, pd.DataFrame]:
     x1 = rng.normal(0, 1, n)
     x2 = rng.normal(0, 1, n)
     noise = rng.normal(0, 1 + 0.5 * np.abs(x1), n)
-    y = 2.0 + 1.2 * x1 - 0.7 * x2 + noise
+    y = 2.0 + 2.2 * x1 - 0.7 * x2 + noise
     frame = pd.DataFrame({"y": y, "x1": x1, "x2": x2, "control": rng.normal(0, 1, n)})
     frame.loc[2, "y"] = 18.0
     return Dataset.from_dataframe(frame, "stress"), frame
@@ -181,4 +182,92 @@ def test_auto_checks_and_validation():
         run_stress_test(
             dataset,
             StressConfig(target="y", predictors=("missing",)),
+        )
+
+
+def test_challenge_supports_expected_direction_and_uses_controls():
+    dataset, _frame = _dataset()
+    report = run_stress_test(
+        dataset,
+        StressConfig(
+            target="y",
+            predictors=("x1", "x2"),
+            checks=("diagnostics", "influence", "robust", "specifications", "bootstrap"),
+            bootstrap=40,
+            seed=4,
+            challenge=ChallengeConfig(
+                hypothesis="x1 положительно связан с y",
+                focal="x1",
+                direction="positive",
+                controls=("control",),
+            ),
+        ),
+    )
+    assert report.challenge is not None
+    assert report.challenge.status == "supported"
+    assert report.challenge.focal == "x1"
+    assert any(item.id == "challenge_controls" for item in report.scenarios)
+    controls_check = next(
+        item for item in report.challenge.checks if item["id"] == "controls"
+    )
+    assert controls_check["status"] != "not_tested"
+    baseline = next(
+        item for item in report.challenge.checks if item["id"] == "baseline"
+    )
+    assert baseline["b"] is not None
+    assert report.bootstrap is not None
+    assert "positive_share" in report.bootstrap.coefficients["x1"]
+
+
+def test_challenge_with_opposite_direction_is_contradicted():
+    dataset, _frame = _dataset()
+    report = run_stress_test(
+        dataset,
+        StressConfig(
+            target="y",
+            predictors=("x1", "x2"),
+            checks=("diagnostics", "robust"),
+            bootstrap=0,
+            challenge=ChallengeConfig(
+                hypothesis="x1 отрицательно связан с y",
+                focal="x1",
+                direction="negative",
+            ),
+        ),
+    )
+    assert report.challenge is not None
+    assert report.challenge.status == "contradicted"
+    assert any(item["id"] == "baseline" and item["status"] == "contradicts" for item in report.challenge.checks)
+
+
+def test_challenge_rejects_focal_outside_model_and_control_inside_model():
+    dataset, _frame = _dataset()
+    with pytest.raises(ValueError, match="Фокус"):
+        run_stress_test(
+            dataset,
+            StressConfig(
+                target="y",
+                predictors=("x1", "x2"),
+                checks=("diagnostics",),
+                challenge=ChallengeConfig(
+                    hypothesis="Гипотеза",
+                    focal="control",
+                    direction="positive",
+                ),
+            ),
+        )
+    with pytest.raises(ValueError, match="уже входит"):
+        run_stress_test(
+            dataset,
+            StressConfig(
+                target="y",
+                predictors=("x1", "x2"),
+                checks=("diagnostics",),
+                challenge=ChallengeConfig(
+                    hypothesis="Гипотеза",
+                    focal="x1",
+                    direction="positive",
+                    controls=("x2",),
+                ),
+            ),
         )

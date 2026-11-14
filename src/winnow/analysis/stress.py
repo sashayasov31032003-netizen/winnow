@@ -48,6 +48,24 @@ MAX_DROP_SHARE = 0.05
 
 
 @dataclass(frozen=True)
+class ChallengeConfig:
+    """Исследовательская гипотеза, которую нужно проверить на устойчивость."""
+
+    hypothesis: str
+    focal: str
+    direction: str = "positive"
+    controls: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "hypothesis": self.hypothesis,
+            "focal": self.focal,
+            "direction": self.direction,
+            "controls": list(self.controls),
+        }
+
+
+@dataclass(frozen=True)
 class StressConfig:
     """Параметры прогона. Сохраняются вместе с результатом."""
 
@@ -60,6 +78,7 @@ class StressConfig:
     alpha: float = 0.05
     add_controls: tuple[str, ...] = ()
     auto: bool = False
+    challenge: ChallengeConfig | None = None
 
     def as_payload(self) -> dict[str, Any]:
         return {
@@ -72,6 +91,7 @@ class StressConfig:
             "alpha": self.alpha,
             "add_controls": list(self.add_controls),
             "auto": self.auto,
+            "challenge": self.challenge.as_payload() if self.challenge else None,
         }
 
 
@@ -128,6 +148,35 @@ class BootstrapReport:
 
 
 @dataclass
+class ChallengeReport:
+    """Проверка одной исследовательской гипотезы."""
+
+    hypothesis: str
+    focal: str
+    direction: str
+    controls: list[str]
+    status: str
+    summary: str
+    checks: list[dict[str, Any]]
+    findings: list[Finding] = field(default_factory=list)
+
+    def as_payload(self) -> dict[str, Any]:
+        return {
+            "hypothesis": self.hypothesis,
+            "focal": self.focal,
+            "direction": self.direction,
+            "controls": list(self.controls),
+            "status": self.status,
+            "summary": self.summary,
+            "checks": _safe(self.checks),
+            "findings": [
+                {"kind": item.kind, "text": item.text, "source": item.source}
+                for item in self.findings
+            ],
+        }
+
+
+@dataclass
 class StressReport:
     """Полный отчёт Research Stress Test."""
 
@@ -145,6 +194,7 @@ class StressReport:
     findings: list[Finding]
     methodology: dict[str, Any]
     run_id: int | None = None
+    challenge: ChallengeReport | None = None
 
     def as_payload(self) -> dict[str, Any]:
         return {
@@ -163,6 +213,7 @@ class StressReport:
                 for scenario in self.scenarios
             ],
             "bootstrap": self.bootstrap.as_payload() if self.bootstrap else None,
+            "challenge": self.challenge.as_payload() if self.challenge else None,
             "findings": [
                 {"kind": item.kind, "text": item.text, "source": item.source}
                 for item in self.findings
@@ -340,6 +391,29 @@ class StressReport:
                 )
             result.tables.append(boot)
 
+        if self.challenge:
+            challenge = Table(
+                title="Research Challenge",
+                columns=[
+                    Column("Проверка", align="left", is_metric=False),
+                    Column("Статус", align="left", is_metric=False),
+                    Column("b", decimals=3),
+                    Column("p", decimals=3),
+                    Column("Комментарий", align="left", is_metric=False),
+                ],
+            )
+            for item in self.challenge.checks:
+                challenge.add_row(
+                    [
+                        item["title"],
+                        item["status"],
+                        _finite(item.get("b")),
+                        _finite(item.get("p")),
+                        item["note"],
+                    ]
+                )
+            result.tables.append(challenge)
+
         result.findings.extend(self.findings)
         result.warnings.extend(
             item.text for item in self.findings if item.kind == "caution"
@@ -379,6 +453,10 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
         if not dataset.var(name).is_numeric:
             raise ValueError(f"Контрольная переменная «{name}» должна быть числовой")
 
+    challenge, challenge_controls = _prepare_challenge(
+        dataset, target, predictors, config.challenge
+    )
+
     frame = dataset.analysis_frame([target, *predictors]).dropna()
     if len(frame) <= len(predictors) + 2:
         raise ValueError(
@@ -386,12 +464,23 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
             f"{len(predictors)} предикторов"
         )
 
+    bootstrap_count = max(0, min(MAX_BOOTSTRAP, int(config.bootstrap)))
     checks = _resolve_checks(
         dataset, target, predictors, config.checks, config.auto
     )
+    if challenge:
+        # Для гипотезы нужны те же проверки, даже если человек выбрал вручную
+        # только часть: иначе статус «не проверено» был бы нечестным.
+        for name in ("diagnostics", "influence", "robust"):
+            if name not in checks:
+                checks.append(name)
+        if len(predictors) >= 2 and "specifications" not in checks:
+            checks.append("specifications")
+        if len(frame) >= 30 and bootstrap_count >= 20 and "bootstrap" not in checks:
+            checks.append("bootstrap")
+
     confidence = min(0.999, max(0.5, float(config.confidence)))
     alpha = min(0.5, max(0.001, float(config.alpha)))
-    bootstrap_count = max(0, min(MAX_BOOTSTRAP, int(config.bootstrap)))
 
     baseline_fit, baseline_x = _fit(frame, target, predictors, confidence)
     baseline = _scenario(
@@ -455,6 +544,31 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
             )
         )
 
+    challenge_scenario: ModelScenario | None = None
+    if challenge:
+        if challenge_controls:
+            challenge_frame = dataset.analysis_frame(
+                [target, *predictors, *challenge_controls]
+            ).dropna()
+            if len(challenge_frame) <= len(predictors) + len(challenge_controls) + 2:
+                raise ValueError(
+                    "Для гипотезы с контролем слишком мало полных наблюдений"
+                )
+            challenge_scenario = _scenario(
+                "challenge_controls",
+                "Гипотеза: с контролями",
+                "Та же гипотеза с добавленными контрольными переменными.",
+                "challenge",
+                challenge_frame,
+                target,
+                [*predictors, *challenge_controls],
+                confidence,
+                alpha,
+            )
+            scenarios.append(challenge_scenario)
+        else:
+            challenge_scenario = baseline
+
     bootstrap = None
     if "bootstrap" in checks and bootstrap_count >= 20:
         bootstrap = _bootstrap(
@@ -478,6 +592,19 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
         overview,
         alpha,
     )
+    challenge_report = None
+    if challenge:
+        challenge_report = _challenge_report(
+            challenge,
+            baseline,
+            challenge_scenario,
+            scenarios,
+            robust,
+            bootstrap,
+            alpha,
+        )
+        findings.extend(challenge_report.findings)
+        overview["challenge_status"] = challenge_report.status
     methodology = {
         "method": "OLS, робастные SE HC0–HC3, Bootstrap",
         "confidence": confidence,
@@ -515,6 +642,7 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
         overview=overview,
         findings=findings,
         methodology=methodology,
+        challenge=challenge_report,
     )
 
 
@@ -532,6 +660,320 @@ def suggest_checks(
     if len(frame) >= 30:
         checks.append("bootstrap")
     return checks
+
+
+# ------------------------------------------------------------------ Research Challenge
+
+
+def _prepare_challenge(
+    dataset: Dataset,
+    target: str,
+    predictors: list[str],
+    challenge: ChallengeConfig | None,
+) -> tuple[ChallengeConfig | None, list[str]]:
+    """Проверяет гипотезу и возвращает нормализованный конфиг."""
+    if challenge is None:
+        return None, []
+    hypothesis = challenge.hypothesis.strip()
+    if not hypothesis:
+        raise ValueError("Сформулируйте гипотезу")
+    focal = challenge.focal.strip()
+    if focal not in predictors:
+        raise ValueError("Фокус-предиктор должен входить в модель")
+    direction = challenge.direction.strip().lower()
+    if direction in {"+", "pos", "positive", "положительная"}:
+        direction = "positive"
+    elif direction in {"-", "neg", "negative", "отрицательная"}:
+        direction = "negative"
+    else:
+        raise ValueError("Направление гипотезы: positive или negative")
+
+    controls: list[str] = []
+    for name in challenge.controls:
+        name = str(name).strip()
+        if not name or name in controls:
+            continue
+        if name == target or name == focal:
+            raise ValueError("Контрольная переменная не может совпадать с целью или фокусом")
+        if name in predictors:
+            raise ValueError(f"«{name}» уже входит в модель — это не контроль")
+        if name not in dataset.names():
+            raise ValueError(f"Переменной «{name}» нет в наборе")
+        if not dataset.var(name).is_numeric:
+            raise ValueError(f"Контрольная переменная «{name}» должна быть числовой")
+        controls.append(name)
+    return (
+        ChallengeConfig(
+            hypothesis=hypothesis,
+            focal=focal,
+            direction=direction,
+            controls=tuple(controls),
+        ),
+        controls,
+    )
+
+
+def _coefficient(
+    scenario: ModelScenario | None, name: str
+) -> dict[str, Any] | None:
+    if scenario is None:
+        return None
+    return next((item for item in scenario.coefficients if item["name"] == name), None)
+
+
+def _challenge_coefficient_status(
+    coefficient: dict[str, Any] | None, expected: str, alpha: float
+) -> tuple[str, str]:
+    """Статус одного коэффициента относительно направления гипотезы."""
+    if coefficient is None:
+        return "not_tested", "Коэффициент не найден в этом сценарии."
+    actual = coefficient.get("direction")
+    significant = bool(coefficient.get("significant"))
+    if actual == expected and significant:
+        return "supported", "Знак совпадает, p < α."
+    if actual == expected:
+        return "weakens", "Знак совпадает, но связь статистически незначима."
+    if significant:
+        return "contradicts", "Знак противоположен ожидаемому и значим."
+    return "weakens", "Знак противоположен ожидаемому, но связь незначима."
+
+
+def _challenge_bootstrap_status(
+    values: dict[str, Any] | None, expected: str, alpha: float
+) -> tuple[str, str]:
+    if not values:
+        return "not_tested", "Bootstrap не выполнялся."
+    positive = values.get("positive_share")
+    if positive is None:
+        return "not_tested", "Bootstrap не сохранил направление."
+    directional = float(positive) if expected == "positive" else 1.0 - float(positive)
+    low = values.get("ci_low")
+    high = values.get("ci_high")
+    if low is None or high is None:
+        return "not_tested", "Bootstrap-интервал недоступен."
+    if expected == "positive" and high < 0:
+        return "contradicts", "Bootstrap-интервал целиком ниже нуля."
+    if expected == "negative" and low > 0:
+        return "contradicts", "Bootstrap-интервал целиком выше нуля."
+    if low <= 0 <= high or directional < 0.95:
+        return (
+            "weakens",
+            f"Интервал включает 0 или знак совпадает только в {directional:.0%} повторов.",
+        )
+    if values.get("significance_share") is not None and values["significance_share"] < 0.95:
+        return "weakens", "Значимость сохраняется менее чем в 95 % повторов."
+    return "supported", "Интервал не включает 0, знак и значимость стабильны."
+
+
+def _challenge_report(
+    challenge: ChallengeConfig,
+    baseline: ModelScenario,
+    challenge_scenario: ModelScenario | None,
+    scenarios: list[ModelScenario],
+    robust: dict[str, list[dict[str, Any]]],
+    bootstrap: BootstrapReport | None,
+    alpha: float,
+) -> ChallengeReport:
+    """Собирает проверку гипотезы из уже посчитанных сценариев."""
+    expected = challenge.direction
+    checks: list[dict[str, Any]] = []
+    findings: list[Finding] = []
+
+    base = _coefficient(baseline, challenge.focal)
+    base_status, base_note = _challenge_coefficient_status(base, expected, alpha)
+    checks.append(
+        {
+            "id": "baseline",
+            "title": "Исходная модель",
+            "status": base_status,
+            "coefficient": base,
+            "note": base_note,
+        }
+    )
+
+    hc3_rows = robust.get("HC3", [])
+    hc3 = next((item for item in hc3_rows if item["name"] == challenge.focal), None)
+    hc3_status, hc3_note = _challenge_coefficient_status(hc3, expected, alpha)
+    checks.append(
+        {
+            "id": "robust_hc3",
+            "title": "Робастные ошибки HC3",
+            "status": hc3_status,
+            "coefficient": hc3,
+            "note": hc3_note,
+        }
+    )
+
+    influence = next(
+        (item for item in scenarios if item.id == "drop_influential"), None
+    )
+    if influence:
+        coef = _coefficient(influence, challenge.focal)
+        status, note = _challenge_coefficient_status(coef, expected, alpha)
+        note = note + " Сценарий без наиболее влиятельных наблюдений."
+    else:
+        coef = None
+        status, note = "not_tested", "Влиятельных наблюдений не найдено."
+    checks.append(
+        {
+            "id": "influence",
+            "title": "Без влиятельных наблюдений",
+            "status": status,
+            "coefficient": coef,
+            "note": note,
+        }
+    )
+
+    if challenge.controls:
+        coef = _coefficient(challenge_scenario, challenge.focal)
+        status, note = _challenge_coefficient_status(coef, expected, alpha)
+        note = note + " С контролем: " + ", ".join(challenge.controls) + "."
+    else:
+        coef = None
+        status, note = "not_tested", "Контрольные переменные не заданы."
+    checks.append(
+        {
+            "id": "controls",
+            "title": "С контрольными переменными",
+            "status": status,
+            "coefficient": coef,
+            "note": note,
+        }
+    )
+
+    spec_scenarios = [
+        item for item in scenarios if item.kind == "specification"
+    ]
+    spec_items: list[dict[str, Any]] = []
+    for scenario in spec_scenarios:
+        coef = _coefficient(scenario, challenge.focal)
+        if coef is None:
+            continue
+        status, note = _challenge_coefficient_status(coef, expected, alpha)
+        spec_items.append(
+            {
+                "scenario": scenario.id,
+                "title": scenario.title,
+                "status": status,
+                "coefficient": coef,
+                "note": note,
+            }
+        )
+    if spec_items:
+        if any(item["status"] == "contradicts" for item in spec_items):
+            spec_status = "contradicts"
+        elif any(item["status"] == "weakens" for item in spec_items):
+            spec_status = "weakens"
+        else:
+            spec_status = "supported"
+        support = sum(item["status"] == "supported" for item in spec_items)
+        spec_note = f"Фокус сохраняется в {support} из {len(spec_items)} спецификаций."
+    else:
+        spec_status = "not_tested"
+        spec_note = "Альтернативные спецификации не проверялись."
+    checks.append(
+        {
+            "id": "specifications",
+            "title": "Альтернативные спецификации",
+            "status": spec_status,
+            "coefficient": spec_items[0]["coefficient"] if spec_items else None,
+            "note": spec_note,
+            "details": spec_items,
+        }
+    )
+
+    boot_values = (
+        bootstrap.coefficients.get(challenge.focal) if bootstrap else None
+    )
+    boot_status, boot_note = _challenge_bootstrap_status(boot_values, expected, alpha)
+    checks.append(
+        {
+            "id": "bootstrap",
+            "title": "Bootstrap",
+            "status": boot_status,
+            "coefficient": {
+                "b": boot_values.get("mean"),
+                "ci_low": boot_values.get("ci_low"),
+                "ci_high": boot_values.get("ci_high"),
+            }
+            if boot_values
+            else None,
+            "note": boot_note,
+        }
+    )
+
+    tested = [item for item in checks if item["status"] != "not_tested"]
+    contradictions = [item for item in tested if item["status"] == "contradicts"]
+    supports = [item for item in tested if item["status"] == "supported"]
+
+    if base_status == "contradicts":
+        overall = "contradicted"
+        summary = (
+            "Исходная модель противоречит ожидаемому направлению: коэффициент "
+            "значим, но имеет противоположный знак. Гипотеза не поддерживается."
+        )
+    elif base_status == "weakens":
+        overall = "insufficient"
+        summary = (
+            "Исходная связь не даёт достаточных оснований: знак может совпадать, "
+            "но статистическая значимость отсутствует."
+        )
+    elif contradictions:
+        overall = "fragile"
+        summary = (
+            f"Гипотеза поддерживается в {len(supports)} из {len(tested)} проверок, "
+            f"но в {len(contradictions)} сценариях направление меняется. "
+            "Вывод нельзя считать устойчивым."
+        )
+    elif supports and len(supports) >= max(1, len(tested) // 2):
+        overall = "supported"
+        summary = (
+            f"Гипотеза сохраняется в {len(supports)} из {len(tested)} проверенных "
+            "сценариев. Это устойчивость в данных, а не доказательство причинности."
+        )
+    else:
+        overall = "fragile"
+        summary = (
+            "Гипотеза сохраняется лишь в части сценариев; результат зависит от "
+            "метода или спецификации."
+        )
+
+    checks_payload = []
+    for item in checks:
+        coefficient = item.get("coefficient") or {}
+        checks_payload.append(
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "status": item["status"],
+                "b": coefficient.get("b"),
+                "p": coefficient.get("p"),
+                "ci_low": coefficient.get("ci_low"),
+                "ci_high": coefficient.get("ci_high"),
+                "significant": coefficient.get("significant"),
+                "note": item["note"],
+                "details": item.get("details", []),
+            }
+        )
+
+    kind = "conclusion" if overall == "supported" else "caution"
+    findings.append(
+        Finding(
+            kind=kind,
+            text=f"Research Challenge: {summary}",
+            source="STRESS",
+        )
+    )
+    return ChallengeReport(
+        hypothesis=challenge.hypothesis,
+        focal=challenge.focal,
+        direction=challenge.direction,
+        controls=list(challenge.controls),
+        status=overall,
+        summary=summary,
+        checks=checks_payload,
+        findings=findings,
+    )
 
 
 # ------------------------------------------------------------------ модели
@@ -823,6 +1265,7 @@ def _bootstrap(
             "sd": _round(float(np.std(array, ddof=1))),
             "ci_low": _round(float(lo)),
             "ci_high": _round(float(hi)),
+            "positive_share": _round(positive),
             "sign_share": _round(max(positive, 1.0 - positive)),
             "significance_share": _round(significance_share),
             "histogram": {
