@@ -49,6 +49,19 @@ const SECTION_TITLES: Record<Section, string> = {
   methodology: "Методология",
 };
 
+const CHECK_TITLES: Record<string, string> = {
+  diagnostics: "предпосылки",
+  influence: "влияние наблюдений",
+  robust: "робастные SE",
+  specifications: "спецификации",
+  sensitivity: "чувствительность",
+  bootstrap: "Bootstrap",
+};
+
+const MISSING_TITLES: Record<string, string> = {
+  complete_case: "строки с пропусками исключены",
+};
+
 function fmt(value: number | null | undefined, digits = 3): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
   return value.toFixed(digits).replace(".", ",");
@@ -704,8 +717,15 @@ function Methodology({ report }: { report: StressReport }) {
           <div><dt>Bootstrap</dt><dd>{String(report.methodology.bootstrap ?? "—")}</dd></div>
           <div><dt>Доверие</dt><dd>{pct(Number(report.methodology.confidence))}</dd></div>
           <div><dt>α</dt><dd>{String(report.methodology.alpha ?? "—")}</dd></div>
-          <div><dt>Пропуски</dt><dd>{String(report.methodology.missing ?? "—")}</dd></div>
-          <div><dt>Проверки</dt><dd>{(report.methodology.checks as string[] | undefined)?.join(", ") ?? "—"}</dd></div>
+          <div><dt>Пропуски</dt><dd>{MISSING_TITLES[String(report.methodology.missing)] ?? String(report.methodology.missing ?? "—")}</dd></div>
+          <div>
+            <dt>Проверки</dt>
+            <dd>
+              {(report.methodology.checks as string[] | undefined)
+                ?.map((item) => CHECK_TITLES[item] ?? item)
+                .join(", ") ?? "—"}
+            </dd>
+          </div>
         </dl>
       </div>
       <div className="card stress-card">
