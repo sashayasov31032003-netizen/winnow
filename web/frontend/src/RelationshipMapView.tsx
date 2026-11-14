@@ -28,6 +28,25 @@ const METHOD_OPTIONS = [
   { id: "kendall", title: "Кендалл" },
 ];
 
+const TYPE_TITLES: Record<string, string> = {
+  numeric: "числовая",
+  string: "строковая",
+  date: "дата",
+  boolean: "логическая",
+};
+
+const MEASURE_TITLES: Record<string, string> = {
+  scale: "количественная",
+  ordinal: "порядковая",
+  nominal: "номинальная",
+};
+
+const KIND_TITLES: Record<string, string> = {
+  numeric: "количественная пара",
+  categorical: "категориальная пара",
+  mixed: "смешанная пара",
+};
+
 const WIDTH = 1000;
 const HEIGHT = 680;
 
@@ -594,8 +613,8 @@ function NodePanel({
       <h2>{node.label || node.name}</h2>
       <p className="muted small">{node.display}</p>
       <dl className="relations-dl">
-        <div><dt>Тип</dt><dd>{node.type}</dd></div>
-        <div><dt>Уровень</dt><dd>{node.measure}</dd></div>
+        <div><dt>Тип</dt><dd>{TYPE_TITLES[node.type] ?? node.type}</dd></div>
+        <div><dt>Уровень</dt><dd>{MEASURE_TITLES[node.measure] ?? node.measure}</dd></div>
         <div><dt>Группа</dt><dd>{node.group_label}</dd></div>
         <div><dt>Наблюдений</dt><dd>{node.n}</dd></div>
         <div><dt>Пропущено</dt><dd>{node.n_missing}</dd></div>
@@ -646,7 +665,7 @@ function EdgePanel({
         <button type="button" className="ghost small-button" onClick={onClose}>Закрыть</button>
       </div>
       <h2>{source?.label ?? edge.source} ↔ {target?.label ?? edge.target}</h2>
-      <p className="muted small">{edge.method_label} · {edge.kind}</p>
+      <p className="muted small">{edge.method_label} · {KIND_TITLES[edge.kind] ?? edge.kind}</p>
       <dl className="relations-dl">
         <div><dt>Статистика</dt><dd>{formatStat(edge.statistic)}</dd></div>
         <div><dt>Сила</dt><dd>{formatStat(edge.strength)}</dd></div>
