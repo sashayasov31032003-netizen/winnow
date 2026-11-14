@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from winnow.web.ai_api import router as ai_router
 from winnow.web.api import router
 from winnow.web.core import SECRET, init_db
+from winnow.web.relationships_api import router as relationships_router
 from winnow.web.stress_api import router as stress_router
 
 #: Собранный интерфейс (npm run build в web/frontend).
@@ -77,6 +78,8 @@ def create_app() -> FastAPI:
     app.include_router(ai_router)
     # Research Stress Test: отдельный отчёт и сохранение прогона.
     app.include_router(stress_router)
+    # Карта взаимосвязей: корреляции и меры связи.
+    app.include_router(relationships_router)
 
     def app_page() -> FileResponse:
         """Отдаёт собранный интерфейс: маршрут внутри разбирает JavaScript.

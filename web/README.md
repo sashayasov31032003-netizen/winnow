@@ -71,6 +71,7 @@ web\.venv\Scripts\python -m pip install -r web\requirements.txt
 | **Research Intelligence**: чат с агентом, реальные расчёты по запросу, объяснение | готово (Фаза 0) |
 | **Качество данных**: пропуски, дубликаты, выбросы, дисбаланс, VIF, Бреуш-Пеган, Кук | готово (Фаза 1) |
 | **Research Stress Test**: HC0–HC3, влияние наблюдений, спецификации, Bootstrap | готово (MVP) |
+| **Карта взаимосвязей**: узлы-переменные, корреляции, V Крамера, η², FDR | готово |
 | Поиск закономерностей, сравнение моделей, What-if, граф, многорасчётные отчёты | следующие фазы |
 
 ## Как устроено
@@ -85,6 +86,7 @@ src/winnow/web/          сервер
   policy.py               какие процедуры разрешены API и ИИ (один список)
   api.py                  HTTP-эндпоинты
   stress_api.py           Research Stress Test: прогон и сохранение
+  relationships_api.py    карта связей: узлы, рёбра, сводка
   runs.py                 общее сохранение/чтение analysis_runs
   ai_api.py               ИИ: чат потоком (SSE), диалоги, сохранённые расчёты
   ai/                     Research Intelligence
@@ -101,14 +103,16 @@ src/winnow/analysis/
   quality.py              инспектор качества: данные и линейная модель
   diagnostics.py          HC0–HC3, Уайт, Cook/leverage, Бреуш-Пеган
   stress.py               Research Stress Test: сценарии, Bootstrap, отчёт
+  relationships.py        карта связей: корреляции, V Крамера, η², FDR
 web/frontend/             React + TypeScript + Vite
   src/ResearchAI.tsx      раздел «Исследование AI»: чат и карточки расчётов
   src/StressTestView.tsx  раздел «Устойчивость»: форма и отчёт
+  src/RelationshipMapView.tsx  раздел «Карта связей»: SVG-сеть и панели
   src/QualityPanel.tsx    вкладка «Качество»: проблемы, метрики, переменные
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (133)
+web/tests/                тесты API, ИИ и качества (135)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -181,6 +185,7 @@ web/run.cmd, open.cmd     запуск и открытие
 | `GET /api/datasets/{id}/stress-tests` | история Stress Test набора |
 | `GET /api/stress-tests/{run_id}` | сохранённый Stress Test |
 | `GET /api/stress-tests/{run_id}/export?format=` | экспорт в html / docx / xlsx |
+| `POST /api/datasets/{id}/relationships` | карта связей переменных |
 | `GET /api/ai/config` | модель, провайдер и остаток квоты; ключа здесь нет |
 | `POST /api/ai/chat` | один ход агента потоком событий (SSE) |
 | `GET /api/ai/conversations`, `GET/DELETE .../{id}` | диалоги и их история |
@@ -225,6 +230,16 @@ web/run.cmd, open.cmd     запуск и открытие
   спецификациям и Bootstrap;
 * если модель не оценивается (мало наблюдений, коллинеарность), API отвечает
   422 с причиной, а не пустым отчётом.
+
+### Карта взаимосвязей
+
+* отдельный раздел **«Карта связей»**; узлы — все переменные, включая
+  недоступные для связи (с пояснением);
+* количественные пары — Pearson / Spearman / Kendall, категориальные —
+  V Крамера, смешанные — η²; пропуски попарно, p и q (FDR);
+* фильтры силы, направления и значимости; поиск; скрытие групп;
+* клик по переменной и по линии открывает панель с числами и ограничениями;
+* карта не причинная; сильные корреляции помечаются как повод проверить VIF.
 
 ### Research Intelligence
 
@@ -284,8 +299,8 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 133 теста API, ИИ и качества
-python -m pytest -q                                    # 451 тест движка
+web\.venv\Scripts\python -m pytest web\tests -q     # 135 тестов API, ИИ и качества
+python -m pytest -q                                    # 456 тестов движка
 ```
 
 ## Настройки
@@ -422,6 +437,6 @@ npm.cmd run build   # собрать в dist, его отдаёт сервер
   проверяет качество данных и линейной модели. Ещё не сделаны поиск
   закономерностей, сравнение моделей и многорасчётные отчёты (см.
   `docs/research-intelligence.md`, `docs/quality-inspector.md`,
-  `docs/stress-test.md`).
+  `docs/stress-test.md`, `docs/relationship-map.md`).
   Ответ приходит целиком, без потоковых токенов; бесплатные модели имеют суточный
   лимит и могут обучаться на промптах — для реальных данных нужен свой endpoint.

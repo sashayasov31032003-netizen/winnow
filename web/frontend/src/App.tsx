@@ -7,6 +7,7 @@ import {
   type User,
 } from "./api";
 import { DatasetView } from "./DatasetView";
+import { RelationshipMapView } from "./RelationshipMapView";
 import { ResearchAI } from "./ResearchAI";
 import { StressTestView } from "./StressTestView";
 import { SurveysView } from "./SurveysView";
@@ -40,11 +41,12 @@ export default function App() {
 //: С какого раздела начинать. Ссылки с главной приходят как
 //: /app?section=surveys («создать опрос»), /app?section=ai («исследование»)
 //: или /app?section=data («исследовать данные»).
-function requestedSection(): "data" | "surveys" | "ai" | "stress" {
+function requestedSection(): "data" | "surveys" | "ai" | "stress" | "relations" {
   const section = new URLSearchParams(window.location.search).get("section");
   if (section === "surveys") return "surveys";
   if (section === "ai") return "ai";
   if (section === "stress") return "stress";
+  if (section === "relations") return "relations";
   return "data";
 }
 
@@ -164,13 +166,10 @@ function Workspace({
 }: {
   user: User;
   onLogout: () => void;
-  initialSection: "data" | "surveys" | "ai" | "stress";
+  initialSection: "data" | "surveys" | "ai" | "stress" | "relations";
 }) {
-  // Четыре раздела одного приложения: данные, опросы, исследование с ИИ и
-  // проверка устойчивости результатов.
-  // Переключатель живёт в панели, потому что от него зависит и список слева,
-  // и содержимое справа.
-  const [section, setSection] = useState<"data" | "surveys" | "ai" | "stress">(initialSection);
+  // Пять разделов: данные, опросы, исследование с ИИ, устойчивость и карта связей.
+  const [section, setSection] = useState<"data" | "surveys" | "ai" | "stress" | "relations">(initialSection);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
@@ -353,6 +352,14 @@ function Workspace({
             >
               Устойчивость
             </button>
+            <button
+              type="button"
+              className={section === "relations" ? "active" : ""}
+              aria-pressed={section === "relations"}
+              onClick={() => setSection("relations")}
+            >
+              Карта связей
+            </button>
           </div>
         </div>
 
@@ -440,7 +447,9 @@ function Workspace({
                 <p className="muted small" style={{ margin: 0 }}>
                   {section === "stress"
                     ? "Выберите набор: Stress Test работает с его переменными и не меняет данные."
-                    : "Выберите набор: агент работает с ним и не меняет данные."}
+                    : section === "relations"
+                      ? "Выберите набор: карта покажет связи его переменных, не меняя данные."
+                      : "Выберите набор: агент работает с ним и не меняет данные."}
                 </p>
               )}
             </div>
@@ -645,6 +654,21 @@ function Workspace({
             </div>
           ) : (
             <StressTestView key={selected} datasetId={selected} />
+          )
+        ) : section === "relations" ? (
+          selected === null ? (
+            <div className="card empty">
+              <span className="empty-icon" aria-hidden="true">
+                ◇
+              </span>
+              <h2>Карта взаимосвязей</h2>
+              <p>
+                Выберите набор в панели слева. Карта покажет переменные узлами,
+                а статистические связи — линиями. Это не причинный граф.
+              </p>
+            </div>
+          ) : (
+            <RelationshipMapView key={selected} datasetId={selected} />
           )
         ) : selected === null ? (
           <div className="card empty">

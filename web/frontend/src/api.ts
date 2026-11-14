@@ -379,6 +379,76 @@ export type StressRequest = {
   } | null;
 };
 
+// ---------------------------------------------------- карта взаимосвязей
+
+export type RelationshipGroup = "scale" | "ordinal" | "nominal" | "other";
+
+export type RelationshipNode = {
+  id: string;
+  name: string;
+  label: string;
+  display: string;
+  type: string;
+  measure: string;
+  group: RelationshipGroup;
+  group_label: string;
+  n: number;
+  n_missing: number;
+  n_unique: number;
+  available: boolean;
+  reason: string;
+  degree: number;
+  significant_degree: number;
+  recommendations: string[];
+};
+
+export type RelationshipEdge = {
+  id: string;
+  source: string;
+  target: string;
+  method: string;
+  method_label: string;
+  kind: "numeric" | "categorical" | "mixed";
+  statistic: number;
+  strength: number;
+  p: number | null;
+  q: number | null;
+  n: number;
+  direction: "positive" | "negative" | "none";
+  significant: boolean;
+  warning: string;
+  rows?: number;
+  columns?: number;
+  groups?: number;
+  eta_squared?: number;
+};
+
+export type RelationshipMap = {
+  dataset_revision: string;
+  nodes: RelationshipNode[];
+  edges: RelationshipEdge[];
+  summary: {
+    n_nodes: number;
+    n_available: number;
+    n_edges: number;
+    n_significant: number;
+    n_strong: number;
+    n_potential_collinearity: number;
+    method: string;
+    strongest: RelationshipEdge[];
+    most_connected: {
+      name: string;
+      display: string;
+      degree: number;
+      significant_degree: number;
+    }[];
+    recommendations: string[];
+    truncated: boolean;
+    total_variables: number;
+  };
+  methodology: Record<string, unknown>;
+};
+
 export type AIRunSummary = {
   run_id: number | null;
   procedure: string;
@@ -755,6 +825,11 @@ export const api = {
     }
     return response.blob();
   },
+
+  relationships: (datasetId: number, method = "auto", maxVariables = 60) =>
+    request<RelationshipMap>(`/api/datasets/${datasetId}/relationships`, {
+      ...jsonInit({ method, max_variables: maxVariables }),
+    }),
 };
 
 /**

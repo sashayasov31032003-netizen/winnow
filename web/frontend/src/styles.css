@@ -2172,6 +2172,10 @@ tbody tr:hover .cell-input:not([data-dirty="true"]) {
   flex: none;
 }
 
+.section-switch button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 .ai-layout {
   display: flex;
   flex-direction: column;
@@ -3300,5 +3304,420 @@ tbody tr:hover .cell-input:not([data-dirty="true"]) {
 @media (max-width: 760px) {
   .stress-report-actions {
     align-items: flex-start;
+  }
+}
+
+/* ------------------------------------------------------ Карта взаимосвязей */
+.relations-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 1240px;
+}
+
+.relations-head {
+  padding: var(--space-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.relations-head h1 {
+  font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
+  margin: 2px 0 var(--space-2);
+}
+
+.relations-head p {
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.55;
+}
+
+.relations-head-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.relations-revision {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+}
+
+.relations-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+}
+
+.relations-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+.relations-stat span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.relations-stat strong {
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+}
+
+.relations-controls {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.relations-control-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.relations-control-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  min-width: 140px;
+}
+
+.relations-control-row label:first-child {
+  min-width: 200px;
+}
+
+.relations-control-row input[type="range"] {
+  min-height: 22px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.relations-search {
+  flex: 1 1 180px;
+  min-width: 180px;
+}
+
+.relations-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px !important;
+  padding-bottom: 8px;
+  white-space: nowrap;
+}
+
+.relations-check input {
+  accent-color: var(--accent);
+}
+
+.relations-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.relations-group-chip {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.relations-group-chip span {
+  color: var(--muted);
+  margin-left: 4px;
+}
+
+.relations-group-chip.scale { border-color: var(--accent-border); }
+.relations-group-chip.ordinal { border-color: var(--info); }
+.relations-group-chip.nominal { border-color: var(--warning); }
+.relations-group-chip.hidden {
+  opacity: 0.45;
+  text-decoration: line-through;
+  background: transparent;
+}
+
+.relations-recommendations {
+  padding: var(--space-3) var(--space-4);
+}
+
+.relations-recommendations strong {
+  font-size: var(--text-sm);
+}
+
+.relations-recommendations ul,
+.relations-notes {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.relations-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.relations-canvas-card {
+  padding: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.relations-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 420px;
+  background:
+    radial-gradient(circle at 50% 45%, var(--accent-soft), transparent 60%),
+    var(--card-bg);
+  cursor: default;
+}
+
+.relations-edge {
+  fill: none;
+  stroke: var(--muted);
+  stroke-linecap: round;
+  opacity: 0.55;
+  transition: opacity var(--fast) var(--ease), stroke-width var(--fast) var(--ease);
+}
+
+.relations-edge.positive { stroke: var(--success); }
+.relations-edge.negative { stroke: var(--danger); }
+.relations-edge.neutral { stroke: var(--muted); }
+.relations-edge.selected {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--current, var(--accent)));
+  stroke-dasharray: 6 3;
+}
+
+.relations-edge-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+.relations-edge-hit:hover + .relations-edge {
+  opacity: 1;
+}
+
+.relations-node {
+  cursor: pointer;
+}
+
+.relations-node circle {
+  fill: var(--accent);
+  stroke: var(--card-bg);
+  stroke-width: 2;
+  opacity: 0.9;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.relations-node.scale circle { fill: var(--accent); }
+.relations-node.ordinal circle { fill: var(--info); }
+.relations-node.nominal circle { fill: var(--warning); }
+.relations-node.other circle { fill: var(--muted); }
+
+.relations-node.selected circle {
+  stroke: var(--text);
+  stroke-width: 3;
+  opacity: 1;
+}
+
+.relations-node.dim { opacity: 0.18; }
+.relations-edge.dim { opacity: 0.08; }
+
+.relations-node text {
+  fill: var(--text);
+  font-size: 11px;
+  font-weight: 550;
+  text-anchor: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--card-bg);
+  stroke-width: 3px;
+}
+
+.relations-legend {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.relations-legend i {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+  background: var(--muted);
+}
+
+.relations-legend i.positive { background: var(--success); }
+.relations-legend i.negative { background: var(--danger); }
+.relations-legend i.neutral { background: var(--muted); }
+
+.relations-panel {
+  min-height: 300px;
+  max-height: 720px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  position: sticky;
+  top: var(--space-4);
+}
+
+.relations-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.relations-panel-inner h2 {
+  font-size: var(--text-lg);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.relations-panel-inner h3 {
+  font-size: var(--text-sm);
+  margin: var(--space-3) 0 0;
+}
+
+.relations-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.relations-dl {
+  display: grid;
+  gap: 4px;
+  margin: var(--space-2) 0;
+}
+
+.relations-dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.relations-dl dt {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.relations-dl dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.relations-edge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.relations-edge-list button {
+  width: 100%;
+  min-height: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  font-weight: 400;
+}
+
+.relations-edge-list button:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--row-hover);
+}
+
+.relations-edge-list button span:first-child {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.relations-edge-list button span:last-child {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.relations-variable-line {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm);
+}
+
+.relations-variable-line span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 980px) {
+  .relations-main {
+    grid-template-columns: 1fr;
+  }
+
+  .relations-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .relations-head {
+    padding: var(--space-4);
+  }
+
+  .relations-head h1 {
+    font-size: var(--text-xl);
+  }
+
+  .relations-canvas {
+    min-height: 360px;
+  }
+
+  .relations-control-row label,
+  .relations-control-row label:first-child {
+    min-width: 100%;
   }
 }
