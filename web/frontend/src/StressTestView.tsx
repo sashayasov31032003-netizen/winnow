@@ -534,6 +534,7 @@ function Diagnostics({ report }: { report: StressReport }) {
 function Comparison({ report }: { report: StressReport }) {
   const names = coefficientNames(report.scenarios);
   const maps = new Map(report.scenarios.map((scenario) => [scenario.id, coefficientMap(scenario)]));
+  const ciLabel = `${Math.round(Number(report.config.confidence) * 100)}% ДИ`;
   return (
     <div className="stress-comparison">
       <div className="card stress-card">
@@ -608,7 +609,7 @@ function Comparison({ report }: { report: StressReport }) {
         <p className="muted small">HC0–HC3: те же коэффициенты, другая оценка SE.</p>
         <table className="stress-table compact">
           <thead>
-            <tr><th>Тип</th><th>Переменная</th><th>b</th><th>SE</th><th>p</th><th>95% ДИ</th></tr>
+            <tr><th>Тип</th><th>Переменная</th><th>b</th><th>SE</th><th>p</th><th>{ciLabel}</th></tr>
           </thead>
           <tbody>
             {Object.entries(report.robust).flatMap(([kind, rows]) =>
@@ -631,6 +632,7 @@ function Comparison({ report }: { report: StressReport }) {
 }
 
 function Sensitivity({ report }: { report: StressReport }) {
+  const ciLabel = `${Math.round(Number(report.config.confidence) * 100)}% ДИ`;
   return (
     <div className="stress-sensitivity">
       <div className="card stress-card">
@@ -662,7 +664,7 @@ function Sensitivity({ report }: { report: StressReport }) {
           </p>
           <table className="stress-table compact">
             <thead>
-              <tr><th>Переменная</th><th>Среднее</th><th>SD</th><th>95% ДИ</th><th>Доля знака</th><th>Доля p &lt; 0,05</th></tr>
+              <tr><th>Переменная</th><th>Среднее</th><th>SD</th><th>{ciLabel}</th><th>Доля знака</th><th>Доля p &lt; 0,05</th></tr>
             </thead>
             <tbody>
               {Object.entries(report.bootstrap.coefficients).map(([name, values]) => (

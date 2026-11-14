@@ -271,7 +271,11 @@ class StressReport:
                 Column("b", decimals=3),
                 Column("SE", decimals=3),
                 Column("p", decimals=3),
-                Column("95 % ДИ", align="left", is_metric=False),
+                Column(
+                    f"{round(self.config.confidence * 100)} % ДИ",
+                    align="left",
+                    is_metric=False,
+                ),
             ],
         )
         for scenario in self.scenarios:
@@ -313,7 +317,11 @@ class StressReport:
                     Column("Переменная", align="left", is_metric=False),
                     Column("Среднее", decimals=3),
                     Column("SD", decimals=3),
-                    Column("95 % ДИ", align="left", is_metric=False),
+                    Column(
+                        f"{round(self.config.confidence * 100)} % ДИ",
+                        align="left",
+                        is_metric=False,
+                    ),
                     Column("Доля знака", decimals=3),
                     Column("Доля p < 0,05", decimals=3),
                 ],
