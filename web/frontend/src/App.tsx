@@ -8,6 +8,7 @@ import {
 } from "./api";
 import { DatasetView } from "./DatasetView";
 import { ResearchAI } from "./ResearchAI";
+import { StressTestView } from "./StressTestView";
 import { SurveysView } from "./SurveysView";
 import { plural, surveyStatusTitle } from "./format";
 import { applyTheme, initialTheme, type Theme } from "./theme";
@@ -39,10 +40,11 @@ export default function App() {
 //: С какого раздела начинать. Ссылки с главной приходят как
 //: /app?section=surveys («создать опрос»), /app?section=ai («исследование»)
 //: или /app?section=data («исследовать данные»).
-function requestedSection(): "data" | "surveys" | "ai" {
+function requestedSection(): "data" | "surveys" | "ai" | "stress" {
   const section = new URLSearchParams(window.location.search).get("section");
   if (section === "surveys") return "surveys";
   if (section === "ai") return "ai";
+  if (section === "stress") return "stress";
   return "data";
 }
 
@@ -162,12 +164,13 @@ function Workspace({
 }: {
   user: User;
   onLogout: () => void;
-  initialSection: "data" | "surveys" | "ai";
+  initialSection: "data" | "surveys" | "ai" | "stress";
 }) {
-  // Три раздела одного приложения: данные, опросы и исследование с ИИ.
+  // Четыре раздела одного приложения: данные, опросы, исследование с ИИ и
+  // проверка устойчивости результатов.
   // Переключатель живёт в панели, потому что от него зависит и список слева,
   // и содержимое справа.
-  const [section, setSection] = useState<"data" | "surveys" | "ai">(initialSection);
+  const [section, setSection] = useState<"data" | "surveys" | "ai" | "stress">(initialSection);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
@@ -342,6 +345,14 @@ function Workspace({
             >
               Исследование AI
             </button>
+            <button
+              type="button"
+              className={section === "stress" ? "active" : ""}
+              aria-pressed={section === "stress"}
+              onClick={() => setSection("stress")}
+            >
+              Устойчивость
+            </button>
           </div>
         </div>
 
@@ -427,7 +438,9 @@ function Workspace({
                 </>
               ) : (
                 <p className="muted small" style={{ margin: 0 }}>
-                  Выберите набор: агент работает с ним и не меняет данные.
+                  {section === "stress"
+                    ? "Выберите набор: Stress Test работает с его переменными и не меняет данные."
+                    : "Выберите набор: агент работает с ним и не меняет данные."}
                 </p>
               )}
             </div>
@@ -615,6 +628,23 @@ function Workspace({
               onSelect={setSelected}
               onGoToData={() => setSection("data")}
             />
+          )
+        ) : section === "stress" ? (
+          selected === null ? (
+            <div className="card empty">
+              <span className="empty-icon" aria-hidden="true">
+                ◇
+              </span>
+              <h2>Устойчивость результатов</h2>
+              <p>
+                Выберите набор в панели слева. Stress Test пересчитает линейную
+                регрессию без влиятельных наблюдений, с робастными ошибками,
+                альтернативными спецификациями и Bootstrap — и покажет, где
+                вывод меняется.
+              </p>
+            </div>
+          ) : (
+            <StressTestView key={selected} datasetId={selected} />
           )
         ) : selected === null ? (
           <div className="card empty">

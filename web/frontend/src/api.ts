@@ -226,6 +226,127 @@ export type QualityReport = {
   predictors: string[];
 };
 
+// ---------------------------------------------------- устойчивость
+
+export type StressCoefficient = {
+  name: string;
+  b: number;
+  se: number;
+  t: number;
+  p: number;
+  ci_low: number;
+  ci_high: number;
+  significant: boolean;
+  direction: "positive" | "negative" | "zero";
+};
+
+export type StressScenario = {
+  id: string;
+  title: string;
+  description: string;
+  kind: string;
+  n: number;
+  coefficients: StressCoefficient[];
+  r_squared: number | null;
+  adj_r_squared: number | null;
+  f_p_value: number | null;
+  notes: string[];
+  changes?: {
+    sign: string[];
+    significance: string[];
+    missing: string[];
+  };
+};
+
+export type StressDiagnostics = {
+  vif: Record<string, number>;
+  max_vif: number;
+  breusch_pagan_p: number | null;
+  breusch_pagan_lm: number | null;
+  white_p: number | null;
+  white_lm: number | null;
+  durbin_watson: number | null;
+  shapiro_p: number | null;
+  condition_index: number | null;
+  n: number;
+};
+
+export type StressInfluence = {
+  cooks_max: number;
+  influential_count: number;
+  leverage_count: number;
+  influential_rows: number[];
+  leverage_rows: number[];
+  thresholds: { cooks: string; leverage: string };
+};
+
+export type StressBootstrapValue = {
+  mean: number | null;
+  sd: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+  sign_share: number | null;
+  significance_share: number | null;
+  histogram: { counts: number[]; edges: number[] };
+  n: number;
+};
+
+export type StressBootstrap = {
+  b: number;
+  valid: number;
+  seed: number;
+  coefficients: Record<string, StressBootstrapValue>;
+  notes: string[];
+};
+
+export type StressOverview = {
+  n: number;
+  r_squared: number;
+  scenarios: number;
+  sign_checked: number;
+  same_sign: number;
+  significance_checked: number;
+  same_significance: number;
+  robust_checked: number;
+  robust_changes: number;
+  bootstrap_unstable: string[];
+};
+
+export type StressFinding = {
+  kind: string;
+  text: string;
+  source: string;
+};
+
+export type StressReport = {
+  run_id: number | null;
+  target: string;
+  predictors: string[];
+  config: Record<string, unknown>;
+  n_cases: number;
+  overview: StressOverview;
+  baseline: StressScenario;
+  diagnostics: StressDiagnostics;
+  influence: StressInfluence | null;
+  robust: Record<string, StressCoefficient[]>;
+  scenarios: StressScenario[];
+  bootstrap: StressBootstrap | null;
+  findings: StressFinding[];
+  methodology: Record<string, unknown>;
+};
+
+export type StressRequest = {
+  target: string;
+  predictors: string[];
+  checks: string[];
+  auto: boolean;
+  bootstrap: number;
+  seed: number;
+  confidence: number;
+  alpha: number;
+  add_controls: string[];
+};
+
 export type AIRunSummary = {
   run_id: number | null;
   procedure: string;
@@ -568,6 +689,18 @@ export const api = {
     request<{ report: QualityReport }>(
       `/api/datasets/${datasetId}/quality`,
       jsonInit({ target, predictors }),
+    ),
+
+  // Research Stress Test: сохраняет прогон и возвращает полный отчёт.
+  stressTest: (datasetId: number, payload: StressRequest) =>
+    request<{ run_id: number; report: StressReport; duration_ms: number }>(
+      `/api/datasets/${datasetId}/stress-test`,
+      jsonInit(payload),
+    ),
+
+  stressTestRun: (runId: number) =>
+    request<{ run: { payload: StressReport; params: Record<string, unknown> } }>(
+      `/api/stress-tests/${runId}`,
     ),
 };
 

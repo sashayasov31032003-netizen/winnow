@@ -29,6 +29,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats as scipy_stats
 
+from winnow.analysis.diagnostics import breusch_pagan
 from winnow.core.dataset import Dataset
 from winnow.core.variable import Measure, VarType
 from winnow.stats.profile import DatasetProfile, profile_dataset
@@ -789,29 +790,9 @@ def _regression_quality(
 def _breusch_pagan(
     residuals: np.ndarray, design: np.ndarray
 ) -> tuple[float | None, float | None]:
-    """Тест Бреуша-Пегана на гетероскедастичность.
-
-    Вспомогательная регрессия квадратов остатков на предикторы: LM = n·R²,
-    распределение — хи-квадрат с числом предикторов. Малое p означает, что
-    разброс ошибки зависит от факторов, и обычные стандартные ошибки неверны.
-    """
-    n = len(residuals)
-    if n <= design.shape[1] + 1:
-        return None, None
-    squared = residuals**2
-    try:
-        coefficients, *_ = np.linalg.lstsq(design, squared, rcond=None)
-    except np.linalg.LinAlgError:
-        return None, None
-    predicted = design @ coefficients
-    ss_residual = float(np.sum((squared - predicted) ** 2))
-    ss_total = float(np.sum((squared - squared.mean()) ** 2))
-    if ss_total <= 0:
-        return None, None
-    r_squared = 1.0 - ss_residual / ss_total
-    lm = n * max(0.0, min(1.0, r_squared))
-    df = max(1, design.shape[1] - 1)
-    return float(lm), float(scipy_stats.chi2.sf(lm, df))
+    """Тест Бреуша-Пегана; общая реализация — в diagnostics.py."""
+    result = breusch_pagan(residuals, design)
+    return result.statistic, result.p_value
 
 
 def _regression_issues(regression: RegressionQuality) -> list[QualityIssue]:

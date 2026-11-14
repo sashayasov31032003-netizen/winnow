@@ -70,6 +70,7 @@ web\.venv\Scripts\python -m pip install -r web\requirements.txt
 | Сводка по вопросам прямо в опросе (без набора) | этап 3 |
 | **Research Intelligence**: чат с агентом, реальные расчёты по запросу, объяснение | готово (Фаза 0) |
 | **Качество данных**: пропуски, дубликаты, выбросы, дисбаланс, VIF, Бреуш-Пеган, Кук | готово (Фаза 1) |
+| **Research Stress Test**: HC0–HC3, влияние наблюдений, спецификации, Bootstrap | готово (MVP) |
 | Поиск закономерностей, сравнение моделей, What-if, граф, многорасчётные отчёты | следующие фазы |
 
 ## Как устроено
@@ -83,6 +84,8 @@ src/winnow/web/          сервер
   survey_dataset.py       опрос → набор: вопрос = переменная, ответы = строки
   policy.py               какие процедуры разрешены API и ИИ (один список)
   api.py                  HTTP-эндпоинты
+  stress_api.py           Research Stress Test: прогон и сохранение
+  runs.py                 общее сохранение/чтение analysis_runs
   ai_api.py               ИИ: чат потоком (SSE), диалоги, сохранённые расчёты
   ai/                     Research Intelligence
     agent.py              цикл: модель → инструмент → результат → ответ
@@ -96,13 +99,16 @@ src/winnow/web/          сервер
   __main__.py             запуск: python -m winnow.web
 src/winnow/analysis/
   quality.py              инспектор качества: данные и линейная модель
+  diagnostics.py          HC0–HC3, Уайт, Cook/leverage, Бреуш-Пеган
+  stress.py               Research Stress Test: сценарии, Bootstrap, отчёт
 web/frontend/             React + TypeScript + Vite
   src/ResearchAI.tsx      раздел «Исследование AI»: чат и карточки расчётов
+  src/StressTestView.tsx  раздел «Устойчивость»: форма и отчёт
   src/QualityPanel.tsx    вкладка «Качество»: проблемы, метрики, переменные
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (127)
+web/tests/                тесты API, ИИ и качества (130)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -171,6 +177,8 @@ web/run.cmd, open.cmd     запуск и открытие
 | `GET /api/public/surveys/{slug}` | анкета для заполнения (без входа) |
 | `POST /api/public/surveys/{slug}/responses` | принять ответ (без входа) |
 | `POST /api/datasets/{id}/quality` | качество данных и линейной модели |
+| `POST /api/datasets/{id}/stress-test` | Research Stress Test, сохраняет прогон |
+| `GET /api/stress-tests/{run_id}` | сохранённый Stress Test |
 | `GET /api/ai/config` | модель, провайдер и остаток квоты; ключа здесь нет |
 | `POST /api/ai/chat` | один ход агента потоком событий (SSE) |
 | `GET /api/ai/conversations`, `GET/DELETE .../{id}` | диалоги и их история |
@@ -195,6 +203,21 @@ web/run.cmd, open.cmd     запуск и открытие
 * через API **не запускаются** «Вычислить переменную» и «Перекодировать»: они
   считают присланные извне выражения, а выполнять чужой код на сервере нельзя,
   пока выражения не проверены отдельно.
+
+### Research Stress Test
+
+* отдельный раздел **«Устойчивость»** в боковом меню, не вкладка набора;
+* линейная регрессия пересчитывается заново для каждого сценария; исходный файл
+  не меняется, все расчёты идут на копии `analysis_frame`;
+* HC0–HC3, Бреуш-Пеган, Уайт, Cook/leverage, альтернативные спецификации,
+  Bootstrap с фиксированным seed;
+* каждый прогон сохраняется в `analysis_runs` (`procedure="stress_test"`) вместе
+  с параметрами, seed и `dataset_revision`; `GET /api/stress-tests/{id}` отдаёт
+  сохранённый отчёт;
+* в интерфейсе есть **Обзор**, **Диагностика**, **Сравнение**,
+  **Чувствительность**, **Методология**; Research Challenge — следующая фаза;
+* если модель не оценивается (мало наблюдений, коллинеарность), API отвечает
+  422 с причиной, а не пустым отчётом.
 
 ### Research Intelligence
 
@@ -254,8 +277,8 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 127 тестов API, ИИ и качества
-python -m pytest -q                                    # 438 тестов движка
+web\.venv\Scripts\python -m pytest web\tests -q     # 130 тестов API, ИИ и качества
+python -m pytest -q                                    # 447 тестов движка
 ```
 
 ## Настройки
@@ -391,6 +414,7 @@ npm.cmd run build   # собрать в dist, его отдаёт сервер
 * **Research Intelligence — Фазы 0–1.** Агент считает и объясняет, инспектор
   проверяет качество данных и линейной модели. Ещё не сделаны поиск
   закономерностей, сравнение моделей и многорасчётные отчёты (см.
-  `docs/research-intelligence.md`, `docs/quality-inspector.md`).
+  `docs/research-intelligence.md`, `docs/quality-inspector.md`,
+  `docs/stress-test.md`).
   Ответ приходит целиком, без потоковых токенов; бесплатные модели имеют суточный
   лимит и могут обучаться на промптах — для реальных данных нужен свой endpoint.
