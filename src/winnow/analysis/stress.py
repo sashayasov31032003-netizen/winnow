@@ -79,6 +79,8 @@ class StressConfig:
     add_controls: tuple[str, ...] = ()
     auto: bool = False
     challenge: ChallengeConfig | None = None
+    #: Номера строк, как в таблице «Данные» (1-based, после фильтра).
+    exclude_rows: tuple[int, ...] = ()
 
     def as_payload(self) -> dict[str, Any]:
         return {
@@ -92,6 +94,7 @@ class StressConfig:
             "add_controls": list(self.add_controls),
             "auto": self.auto,
             "challenge": self.challenge.as_payload() if self.challenge else None,
+            "exclude_rows": list(self.exclude_rows),
         }
 
 
@@ -457,7 +460,9 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
         dataset, target, predictors, config.challenge
     )
 
-    frame = dataset.analysis_frame([target, *predictors]).dropna()
+    raw_frame = dataset.analysis_frame([target, *predictors])
+    exclude_rows = _validate_exclude_rows(config.exclude_rows, len(raw_frame))
+    frame = raw_frame.dropna()
     if len(frame) <= len(predictors) + 2:
         raise ValueError(
             f"Слишком мало полных наблюдений: {len(frame)} на "
@@ -496,6 +501,31 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
     )
 
     diagnostics = _diagnostics(baseline_fit, baseline_x, frame, alpha)
+    scenarios: list[ModelScenario] = [baseline]
+    if exclude_rows:
+        selected_frame = raw_frame.drop(
+            raw_frame.index[[row - 1 for row in exclude_rows]]
+        ).dropna()
+        if len(selected_frame) <= len(predictors) + 2:
+            raise ValueError(
+                "После исключения выбранных строк осталось слишком мало наблюдений"
+            )
+        selected_scenario = _scenario(
+            "exclude_rows",
+            f"Без выбранных строк ({len(exclude_rows)})",
+            "Исключены строки, выбранные в таблице данных.",
+            "sensitivity",
+            selected_frame,
+            target,
+            predictors,
+            confidence,
+            alpha,
+        )
+        selected_scenario.notes.append(
+            "Строки: " + ", ".join(str(row) for row in exclude_rows[:30])
+        )
+        scenarios.append(selected_scenario)
+
     influence = None
     if "influence" in checks or "sensitivity" in checks:
         measures = influence_measures(
@@ -517,7 +547,6 @@ def run_stress_test(dataset: Dataset, config: StressConfig) -> StressReport:
     if "robust" in checks:
         robust = _robust(baseline_fit, baseline_x, confidence, alpha)
 
-    scenarios: list[ModelScenario] = [baseline]
     if "influence" in checks:
         scenario = _drop_influential(frame, target, predictors, confidence, alpha)
         if scenario:
@@ -818,6 +847,24 @@ def _challenge_report(
         {
             "id": "influence",
             "title": "Без влиятельных наблюдений",
+            "status": status,
+            "coefficient": coef,
+            "note": note,
+        }
+    )
+
+    selected = next((item for item in scenarios if item.id == "exclude_rows"), None)
+    if selected:
+        coef = _coefficient(selected, challenge.focal)
+        status, note = _challenge_coefficient_status(coef, expected, alpha)
+        note = note + " Сценарий без выбранных строк."
+    else:
+        coef = None
+        status, note = "not_tested", "Произвольные строки не исключались."
+    checks.append(
+        {
+            "id": "exclude_rows",
+            "title": "Без выбранных строк",
             "status": status,
             "coefficient": coef,
             "note": note,
@@ -1577,6 +1624,23 @@ def _unique_predictors(target: str, names: Iterable[str]) -> list[str]:
         if name and name != target and name not in unique:
             unique.append(name)
     return unique
+
+
+def _validate_exclude_rows(rows: Iterable[int], n_cases: int) -> list[int]:
+    """Проверяет номера строк; нумерация 1-based, как в таблице данных."""
+    unique: list[int] = []
+    for raw in rows:
+        try:
+            value = int(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Номера строк должны быть целыми числами") from exc
+        if value < 1 or value > n_cases:
+            raise ValueError(
+                f"Строка {value} вне диапазона 1–{n_cases} (после фильтра)"
+            )
+        if value not in unique:
+            unique.append(value)
+    return sorted(unique)
 
 
 def _direction(value: float) -> str:

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pathlib
+import tempfile
 import time
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,9 +20,11 @@ from winnow.analysis.stress import (
     StressConfig,
     run_stress_test,
 )
+from winnow.export import report_to_html, result_to_docx, result_to_xlsx
+from winnow.stats.result import Result
 from winnow.web.api import _load_stored, _owned
 from winnow.web.core import User, get_db
-from winnow.web.runs import get_run, save_run
+from winnow.web.runs import get_run, list_runs, save_run
 from winnow.web.security import current_user
 
 router = APIRouter(prefix="/api")
@@ -48,6 +52,7 @@ class StressRequest(BaseModel):
     alpha: float = 0.05
     add_controls: list[str] = Field(default_factory=list)
     challenge: ChallengeRequest | None = None
+    exclude_rows: list[int] = Field(default_factory=list)
 
 
 @router.post("/datasets/{dataset_id}/stress-test")
@@ -112,6 +117,7 @@ def stress_test(
         add_controls=tuple(payload.add_controls),
         auto=payload.auto,
         challenge=challenge,
+        exclude_rows=tuple(payload.exclude_rows),
     )
 
     row = _owned(dataset_id, user, db)
@@ -128,6 +134,9 @@ def stress_test(
         ) from exc
 
     duration_ms = int((time.perf_counter() - started) * 1000)
+    payload = report.as_payload()
+    # Таблицы сохраняем рядом, чтобы экспорт не пересчитывал модель заново.
+    payload["result"] = report.as_result().as_payload()
     run_id = save_run(
         user_id=user.id,
         dataset_id=dataset_id,
@@ -135,7 +144,7 @@ def stress_test(
         procedure="stress_test",
         title=f"Stress Test: {config.target}",
         params=config.as_payload(),
-        payload=report.as_payload(),
+        payload=payload,
         duration_ms=duration_ms,
     )
     report.run_id = run_id
@@ -144,6 +153,17 @@ def stress_test(
         "report": report.as_payload(),
         "duration_ms": duration_ms,
     }
+
+
+@router.get("/datasets/{dataset_id}/stress-tests")
+def list_stress_tests(
+    dataset_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """История Stress Test для набора (новые сверху)."""
+    _owned(dataset_id, user, db)
+    return {"runs": list_runs(user.id, dataset_id, procedure="stress_test", limit=30)}
 
 
 @router.get("/stress-tests/{run_id}")
@@ -159,3 +179,61 @@ def get_stress_test(
     if row["procedure"] != "stress_test":
         raise HTTPException(status_code=404, detail="Stress Test не найден")
     return {"run": row}
+
+
+@router.get("/stress-tests/{run_id}/export")
+def export_stress_test(
+    run_id: int,
+    format: str = "html",
+    user: User = Depends(current_user),
+) -> Response:
+    """Экспорт сохранённого Stress Test в HTML, Word или Excel."""
+    fmt = format.lower().strip()
+    if fmt not in {"html", "docx", "xlsx"}:
+        raise HTTPException(status_code=422, detail="Формат: html, docx или xlsx")
+    try:
+        row = get_run(user.id, run_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if row["procedure"] != "stress_test":
+        raise HTTPException(status_code=404, detail="Stress Test не найден")
+    result_payload = (row.get("payload") or {}).get("result")
+    if not result_payload:
+        raise HTTPException(
+            status_code=422,
+            detail="В этом прогоне нет сохранённых таблиц; пересоберите Stress Test",
+        )
+    result = Result.from_payload(result_payload)
+    filename = f"winnow-stress-test-{run_id}.{fmt}"
+    if fmt == "html":
+        content = report_to_html([result], title=row["title"] or "Research Stress Test").encode(
+            "utf-8"
+        )
+        media = "text/html; charset=utf-8"
+    else:
+        with tempfile.TemporaryDirectory() as folder:
+            target = pathlib.Path(folder) / filename
+            try:
+                if fmt == "docx":
+                    result_to_docx([result], target, title=row["title"] or "Research Stress Test")
+                    media = (
+                        "application/vnd.openxmlformats-officedocument."
+                        "wordprocessingml.document"
+                    )
+                else:
+                    result_to_xlsx([result], target)
+                    media = (
+                        "application/vnd.openxmlformats-officedocument."
+                        "spreadsheetml.sheet"
+                    )
+            except ImportError as exc:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Для этого формата на сервере нет библиотеки экспорта",
+                ) from exc
+            content = target.read_bytes()
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

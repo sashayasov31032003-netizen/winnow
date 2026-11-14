@@ -3220,3 +3220,85 @@ tbody tr:hover .cell-input:not([data-dirty="true"]) {
     min-width: 220px;
   }
 }
+
+/* Исключение строк, история и экспорт */
+.stress-exclude {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stress-exclude label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.stress-history {
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stress-history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.stress-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stress-history-item {
+  width: 100%;
+  min-height: 34px;
+  justify-content: space-between;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  text-align: left;
+  font-weight: 400;
+}
+
+.stress-history-item:hover:not(:disabled) {
+  background: var(--row-hover);
+  border-color: var(--border);
+}
+
+.stress-history-item > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stress-report-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.stress-export {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .stress-report-actions {
+    align-items: flex-start;
+  }
+}

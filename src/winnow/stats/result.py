@@ -9,10 +9,30 @@
 from __future__ import annotations
 
 import datetime as _dt
+import json
+import math
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Iterator
 
 from winnow.core.formatting import num
+
+
+def _json_value(value: Any) -> Any:
+    """Приводит значение ячейки к JSON-совместимому виду."""
+    if hasattr(value, "item") and not isinstance(value, (str, bytes)):
+        try:
+            value = value.item()
+        except (ValueError, TypeError):
+            pass
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    try:
+        json.dumps(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return value
 
 
 @dataclass
@@ -175,6 +195,92 @@ class Result:
     @property
     def is_empty(self) -> bool:
         return not self.tables
+
+    def as_payload(self) -> dict[str, Any]:
+        """Сериализует результат для сохранения рядом с JSON-отчётом.
+
+        Нужен Stress Test: отчёт уже посчитан и сохранён, а экспорт в Word/Excel
+        не должен пересчитывать модель заново.
+        """
+        return {
+            "procedure": self.procedure,
+            "title": self.title,
+            "warnings": list(self.warnings),
+            "notes": list(self.notes),
+            "findings": [
+                {
+                    "kind": item.kind,
+                    "text": item.text,
+                    "source": item.source,
+                    "group": item.group,
+                }
+                for item in self.findings
+            ],
+            "tables": [
+                {
+                    "title": table.title,
+                    "number": table.number,
+                    "footnotes": list(table.footnotes),
+                    "columns": [
+                        {
+                            "label": column.label,
+                            "key": column.key,
+                            "align": column.align,
+                            "decimals": column.decimals,
+                            "is_metric": column.is_metric,
+                            "suffix": column.suffix,
+                        }
+                        for column in table.columns
+                    ],
+                    "rows": [
+                        [_json_value(value) for value in row] for row in table.rows
+                    ],
+                }
+                for table in self.tables
+            ],
+        }
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> Result:
+        """Восстанавливает Result из `as_payload`."""
+        tables: list[Table] = []
+        for raw_table in payload.get("tables", []):
+            columns = [
+                Column(
+                    label=str(column.get("label", "")),
+                    key=str(column.get("key", "")),
+                    align=str(column.get("align", "right")),
+                    decimals=column.get("decimals"),
+                    is_metric=bool(column.get("is_metric", True)),
+                    suffix=str(column.get("suffix", "")),
+                )
+                for column in raw_table.get("columns", [])
+            ]
+            table = Table(
+                title=str(raw_table.get("title", "")),
+                columns=columns,
+                rows=[list(row) for row in raw_table.get("rows", [])],
+                footnotes=[str(item) for item in raw_table.get("footnotes", [])],
+                number=raw_table.get("number"),
+            )
+            tables.append(table)
+        findings = [
+            Finding(
+                kind=str(item.get("kind", "note")),
+                text=str(item.get("text", "")),
+                source=str(item.get("source", "")),
+                group=str(item.get("group", "")),
+            )
+            for item in payload.get("findings", [])
+        ]
+        return cls(
+            procedure=str(payload.get("procedure", "")),
+            title=str(payload.get("title", "")),
+            tables=tables,
+            warnings=[str(item) for item in payload.get("warnings", [])],
+            notes=[str(item) for item in payload.get("notes", [])],
+            findings=findings,
+        )
 
     def to_text(self) -> str:
         """Простое текстовое представление - для консоли, логов и тестов."""

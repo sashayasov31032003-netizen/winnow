@@ -23,6 +23,7 @@ from winnow.analysis.stress import (
 )
 from winnow.core.dataset import Dataset
 from winnow.stats.regression import fit_linear
+from winnow.stats.result import Result
 
 
 def _dataset(n: int = 70, seed: int = 2026) -> tuple[Dataset, pd.DataFrame]:
@@ -146,6 +147,41 @@ def test_stress_does_not_modify_source_frame():
         ),
     )
     pd.testing.assert_frame_equal(frame, before)
+
+
+def test_custom_rows_are_excluded_and_report_roundtrips():
+    dataset, _frame = _dataset()
+    result = run_stress_test(
+        dataset,
+        StressConfig(
+            target="y",
+            predictors=("x1", "x2"),
+            checks=("diagnostics",),
+            bootstrap=0,
+            exclude_rows=(2, 7),
+        ),
+    )
+    scenario = next(item for item in result.scenarios if item.id == "exclude_rows")
+    assert scenario.n == result.baseline.n - 2
+    assert "Строки: 2, 7" in scenario.notes
+
+    restored = Result.from_payload(result.as_result().as_payload())
+    assert restored.procedure == "stress_test"
+    assert [table.title for table in restored.tables] == [
+        table.title for table in result.as_result().tables
+    ]
+
+    with pytest.raises(ValueError, match="вне диапазона"):
+        run_stress_test(
+            dataset,
+            StressConfig(
+                target="y",
+                predictors=("x1", "x2"),
+                checks=("diagnostics",),
+                bootstrap=0,
+                exclude_rows=(999,),
+            ),
+        )
 
 
 def test_add_controls_uses_new_column_and_reports_missing():

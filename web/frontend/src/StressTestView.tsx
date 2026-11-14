@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   api,
   ApiError,
+  type AnalysisSummary,
   type DatasetDetail,
   type StressChallenge,
   type StressReport,
@@ -94,6 +95,34 @@ function pct(value: number | null | undefined): string {
   return `${Math.round(value * 100)}%`;
 }
 
+function parseRowNumbers(value: string): number[] {
+  const numbers = new Set<number>();
+  const parts = value.split(/[\s,;]+/).filter(Boolean);
+  for (const part of parts) {
+    const match = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!match) throw new Error(`Не понял номер строки: «${part}»`);
+    const first = Number(match[1]);
+    const last = match[2] ? Number(match[2]) : first;
+    if (first < 1 || last < first) {
+      throw new Error(`Неверный диапазон строк: «${part}»`);
+    }
+    if (last - first > 5000) throw new Error("Слишком большой диапазон строк");
+    for (let row = first; row <= last; row += 1) numbers.add(row);
+  }
+  return [...numbers].sort((left, right) => left - right);
+}
+
+function dateLabel(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function coefficientMap(scenario: StressScenario): Map<string, StressScenario["coefficients"][number]> {
   return new Map(scenario.coefficients.map((item) => [item.name, item]));
 }
@@ -122,6 +151,9 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
   const [focal, setFocal] = useState("");
   const [direction, setDirection] = useState<"positive" | "negative">("positive");
   const [challengeControls, setChallengeControls] = useState<string[]>([]);
+  const [excludeRows, setExcludeRows] = useState("");
+  const [runs, setRuns] = useState<AnalysisSummary[]>([]);
+  const [loadingRuns, setLoadingRuns] = useState(false);
   const [auto, setAuto] = useState(true);
   const [checks, setChecks] = useState<string[]>(CHECKS.map((item) => item.id));
   const [bootstrap, setBootstrap] = useState(500);
@@ -144,8 +176,10 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
     setHypothesis("");
     setFocal("");
     setChallengeControls([]);
+    setExcludeRows("");
     setReport(null);
     setError("");
+    void refreshRuns();
     api
       .dataset(datasetId)
       .then((loaded) => {
@@ -162,7 +196,20 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId]);
+
+  async function refreshRuns() {
+    setLoadingRuns(true);
+    try {
+      const response = await api.stressRuns(datasetId);
+      setRuns(response.runs);
+    } catch {
+      // История не должна мешать основному отчёту.
+    } finally {
+      setLoadingRuns(false);
+    }
+  }
 
   const predictorsList = useMemo(
     () => (scale.length ? scale : numeric).filter((item) => item.name !== target),
@@ -183,6 +230,13 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
       ),
     [challengeFocal, numeric, predictors, target],
   );
+  const excludedCount = useMemo(() => {
+    try {
+      return parseRowNumbers(excludeRows).length;
+    } catch {
+      return null;
+    }
+  }, [excludeRows]);
 
   function chooseTarget(name: string) {
     setTarget(name);
@@ -223,6 +277,13 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
         return;
       }
     }
+    let excluded: number[] = [];
+    try {
+      excluded = parseRowNumbers(excludeRows);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : "Неверные номера строк");
+      return;
+    }
     setBusy(true);
     try {
       const response = await api.stressTest(datasetId, {
@@ -235,6 +296,7 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
         confidence,
         alpha: 0.05,
         add_controls: controls,
+        exclude_rows: excluded,
         challenge: challengeOn
           ? {
               hypothesis: hypothesis.trim(),
@@ -248,6 +310,7 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
       });
       setReport(response.report);
       setSection("overview");
+      void refreshRuns();
       window.setTimeout(() => {
         document.querySelector(".stress-report-head")?.scrollIntoView({
           behavior: "smooth",
@@ -258,6 +321,39 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
       setError(problem instanceof ApiError ? problem.message : "Stress Test не выполнился");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadRun(runId: number) {
+    setError("");
+    try {
+      const response = await api.stressTestRun(runId);
+      setReport(response.run.payload);
+      setSection("overview");
+      window.setTimeout(() => {
+        document.querySelector(".stress-report-head")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 50);
+    } catch (problem) {
+      setError(problem instanceof ApiError ? problem.message : "Не удалось открыть прогон");
+    }
+  }
+
+  async function download(format: "html" | "docx" | "xlsx") {
+    if (!report?.run_id) return;
+    setError("");
+    try {
+      const blob = await api.stressExport(report.run_id, format);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `winnow-stress-test-${report.run_id}.${format}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (problem) {
+      setError(problem instanceof ApiError ? problem.message : "Не удалось выгрузить отчёт");
     }
   }
 
@@ -401,6 +497,25 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
           )}
         </div>
 
+        <div className="stress-exclude">
+          <label>
+            <span>Исключить конкретные строки</span>
+            <input
+              value={excludeRows}
+              onChange={(event) => setExcludeRows(event.target.value)}
+              placeholder="Например: 3, 17, 20-25"
+            />
+          </label>
+          <span className="muted small">
+            Номера как в таблице «Данные» (1-based).{" "}
+            {excludedCount === null
+              ? "Проверьте формат."
+              : excludedCount
+                ? `Будет исключено: ${excludedCount}.`
+                : "Пока ничего не исключено."}
+          </span>
+        </div>
+
         <div className="stress-challenge-form">
           <label className="stress-auto">
             <input
@@ -475,6 +590,32 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
         </div>
       </div>
 
+      {runs.length > 0 && (
+        <div className="card stress-history">
+          <div className="stress-history-head">
+            <strong>Сохранённые прогоны</strong>
+            <span className="muted small">
+              {loadingRuns ? "Обновляем…" : `${runs.length} на этом наборе`}
+            </span>
+          </div>
+          <div className="stress-history-list">
+            {runs.slice(0, 10).map((item) => (
+              <button
+                key={item.run_id}
+                type="button"
+                className="stress-history-item"
+                onClick={() => void loadRun(item.run_id)}
+              >
+                <span>
+                  <strong>#{item.run_id}</strong> · {item.title}
+                </span>
+                <span className="muted small">{dateLabel(item.created_at)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {error && <div className="error">{error}</div>}
 
       {!report && !error && (
@@ -499,7 +640,23 @@ export function StressTestView({ datasetId }: { datasetId: number }) {
                 {report.n_cases} наблюдений · предикторы: {report.predictors.join(", ")}
               </p>
             </div>
-            <span className="stress-badge">{report.scenarios.length} сценариев</span>
+            <div className="stress-report-actions">
+              <span className="stress-badge">{report.scenarios.length} сценариев</span>
+              {report.run_id && (
+                <div className="stress-export">
+                  {(["html", "docx", "xlsx"] as const).map((format) => (
+                    <button
+                      key={format}
+                      type="button"
+                      className="ghost small-button"
+                      onClick={() => void download(format)}
+                    >
+                      {format === "docx" ? "Word" : format === "xlsx" ? "Excel" : "HTML"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <nav className="stress-sections" aria-label="Разделы Stress Test">

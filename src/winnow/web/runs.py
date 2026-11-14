@@ -61,4 +61,36 @@ def get_run(user_id: int, run_id: int) -> dict[str, Any]:
         }
 
 
-__all__ = ["get_run", "save_run"]
+def list_runs(
+    user_id: int,
+    dataset_id: int,
+    procedure: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Список расчётов набора, новые сверху."""
+    with SessionLocal() as session:
+        query = session.query(AnalysisRun).filter(
+            AnalysisRun.user_id == user_id,
+            AnalysisRun.dataset_id == dataset_id,
+        )
+        if procedure:
+            query = query.filter(AnalysisRun.procedure == procedure)
+        rows = (
+            query.order_by(AnalysisRun.created_at.desc(), AnalysisRun.id.desc())
+            .limit(max(1, min(200, int(limit))))
+            .all()
+        )
+        return [
+            {
+                "run_id": row.id,
+                "dataset_id": row.dataset_id,
+                "procedure": row.procedure,
+                "title": row.title,
+                "created_at": row.created_at.isoformat() if row.created_at else "",
+                "duration_ms": row.duration_ms,
+            }
+            for row in rows
+        ]
+
+
+__all__ = ["get_run", "list_runs", "save_run"]

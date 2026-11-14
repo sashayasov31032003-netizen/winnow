@@ -370,6 +370,7 @@ export type StressRequest = {
   confidence: number;
   alpha: number;
   add_controls: string[];
+  exclude_rows: number[];
   challenge: {
     hypothesis: string;
     focal: string;
@@ -733,6 +734,27 @@ export const api = {
     request<{ run: { payload: StressReport; params: Record<string, unknown> } }>(
       `/api/stress-tests/${runId}`,
     ),
+
+  stressRuns: (datasetId: number) =>
+    request<{ runs: AnalysisSummary[] }>(`/api/datasets/${datasetId}/stress-tests`),
+
+  stressExport: async (runId: number, format: "html" | "docx" | "xlsx") => {
+    const response = await fetch(`/api/stress-tests/${runId}/export?format=${format}`, {
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let detail = "Не удалось выгрузить отчёт";
+      try {
+        const parsed = JSON.parse(text) as { detail?: string };
+        detail = parsed.detail ?? detail;
+      } catch {
+        // оставляем понятное сообщение по умолчанию
+      }
+      throw new ApiError(response.status, detail);
+    }
+    return response.blob();
+  },
 };
 
 /**

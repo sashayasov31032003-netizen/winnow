@@ -108,7 +108,7 @@ web/frontend/             React + TypeScript + Vite
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (132)
+web/tests/                тесты API, ИИ и качества (133)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -178,7 +178,9 @@ web/run.cmd, open.cmd     запуск и открытие
 | `POST /api/public/surveys/{slug}/responses` | принять ответ (без входа) |
 | `POST /api/datasets/{id}/quality` | качество данных и линейной модели |
 | `POST /api/datasets/{id}/stress-test` | Research Stress Test, сохраняет прогон |
+| `GET /api/datasets/{id}/stress-tests` | история Stress Test набора |
 | `GET /api/stress-tests/{run_id}` | сохранённый Stress Test |
+| `GET /api/stress-tests/{run_id}/export?format=` | экспорт в html / docx / xlsx |
 | `GET /api/ai/config` | модель, провайдер и остаток квоты; ключа здесь нет |
 | `POST /api/ai/chat` | один ход агента потоком событий (SSE) |
 | `GET /api/ai/conversations`, `GET/DELETE .../{id}` | диалоги и их история |
@@ -214,6 +216,8 @@ web/run.cmd, open.cmd     запуск и открытие
 * каждый прогон сохраняется в `analysis_runs` (`procedure="stress_test"`) вместе
   с параметрами, seed и `dataset_revision`; `GET /api/stress-tests/{id}` отдаёт
   сохранённый отчёт;
+* история прогонов и экспорт HTML / Word / Excel — из сохранённых таблиц, без
+  повторного расчёта модели;
 * в интерфейсе есть **Обзор**, **Диагностика**, **Сравнение**,
   **Чувствительность**, **Challenge** и **Методология**;
 * **Research Challenge**: гипотеза, фокус-предиктор, ожидаемое направление и
@@ -280,8 +284,8 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 132 теста API, ИИ и качества
-python -m pytest -q                                    # 450 тестов движка
+web\.venv\Scripts\python -m pytest web\tests -q     # 133 теста API, ИИ и качества
+python -m pytest -q                                    # 451 тест движка
 ```
 
 ## Настройки

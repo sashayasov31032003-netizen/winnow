@@ -106,6 +106,21 @@ def test_stress_test_runs_and_is_saved(client):
     assert run["procedure"] == "stress_test"
     assert run["payload"]["run_id"] == body["run_id"]
     assert run["params"]["bootstrap"] == 30
+    assert "result" in run["payload"]
+
+    history = client.get(f"/api/datasets/{dataset_id}/stress-tests")
+    assert history.status_code == 200
+    assert history.json()["runs"][0]["run_id"] == body["run_id"]
+
+    exported = client.get(f"/api/stress-tests/{body['run_id']}/export?format=html")
+    assert exported.status_code == 200
+    assert "text/html" in exported.headers["content-type"]
+    assert "Research Stress Test" in exported.text
+
+    for fmt in ("docx", "xlsx"):
+        binary = client.get(f"/api/stress-tests/{body['run_id']}/export?format={fmt}")
+        assert binary.status_code == 200, binary.text
+        assert len(binary.content) > 1000
 
 
 def test_stress_test_rejects_bad_target_and_checks(client):
@@ -128,6 +143,26 @@ def test_stress_test_rejects_bad_target_and_checks(client):
         json=_payload(bootstrap=5000),
     )
     assert too_many.status_code == 422
+
+
+def test_excluded_rows_are_saved_and_compared(client):
+    _register(client)
+    dataset_id = _upload(client)
+    payload = _payload(exclude_rows=[2, 4], bootstrap=20)
+    response = client.post(f"/api/datasets/{dataset_id}/stress-test", json=payload)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    scenario = next(
+        item for item in body["report"]["scenarios"] if item["id"] == "exclude_rows"
+    )
+    assert scenario["n"] == 58
+    assert body["report"]["config"]["exclude_rows"] == [2, 4]
+
+    invalid = client.post(
+        f"/api/datasets/{dataset_id}/stress-test",
+        json=_payload(exclude_rows=[999]),
+    )
+    assert invalid.status_code == 422
 
 
 def test_stress_challenge_is_saved_with_report(client):
