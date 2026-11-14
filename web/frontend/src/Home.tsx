@@ -73,7 +73,8 @@ export function Home() {
           Winnow — платформа для сбора и анализа данных. Анкету заполняют по
           ссылке без регистрации, а её ответы превращаются в набор данных: дальше
           частоты, таблицы сопряжённости, сравнение групп, графики и отчёт
-          простыми словами.
+          простыми словами. Результат можно проверить на устойчивость и увидеть
+          карту связей переменных.
         </p>
       </section>
 
@@ -103,6 +104,35 @@ export function Home() {
           </p>
           <span className="choice-go">Открыть Winnow →</span>
         </a>
+      </section>
+
+      <section className="landing-features">
+        <div className="landing-features-head">
+          <p className="eyebrow">Не только расчёт</p>
+          <h2>Проверьте вывод, а не только p-value</h2>
+        </div>
+        <div className="feature-grid">
+          <a className="feature-card" href="/app?section=stress">
+            <span className="feature-kicker">Stress Test</span>
+            <strong>Насколько устойчив результат?</strong>
+            <span>Cook's Distance, HC0–HC3, альтернативные модели, Bootstrap и проверка гипотезы.</span>
+          </a>
+          <a className="feature-card" href="/app?section=relations">
+            <span className="feature-kicker">Карта связей</span>
+            <strong>Что с чем связано?</strong>
+            <span>Интерактивная сеть переменных: Pearson, Spearman, Kendall, V Крамера, η².</span>
+          </a>
+          <a className="feature-card" href="/app?section=data">
+            <span className="feature-kicker">Качество данных</span>
+            <strong>Можно ли этим числам верить?</strong>
+            <span>Пропуски, дубликаты, выбросы, мультиколлинеарность и диагностика модели.</span>
+          </a>
+          <a className="feature-card" href="/app?section=ai">
+            <span className="feature-kicker">Research AI</span>
+            <strong>Спросите данные словами</strong>
+            <span>Агент запускает реальные расчёты и объясняет результат; числа — из движка.</span>
+          </a>
+        </div>
       </section>
 
       <section className="steps">

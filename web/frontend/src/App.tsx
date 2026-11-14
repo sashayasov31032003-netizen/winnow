@@ -193,6 +193,14 @@ function Workspace({
   const [dragOver, setDragOver] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // На телефоне боковая панель занимает почти весь первый экран. Начинаем
+  // свёрнутой, но оставляем кнопку «›», чтобы её можно было открыть.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 980px)").matches) {
+      setCollapsed(true);
+    }
+  }, []);
+
   async function refresh() {
     try {
       const list = await api.datasets();
