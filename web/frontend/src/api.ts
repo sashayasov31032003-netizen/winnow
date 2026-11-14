@@ -830,6 +830,9 @@ export const api = {
     request<RelationshipMap>(`/api/datasets/${datasetId}/relationships`, {
       ...jsonInit({ method, max_variables: maxVariables }),
     }),
+
+  datasetRevision: (datasetId: number) =>
+    request<{ revision: string }>(`/api/datasets/${datasetId}/revision`),
 };
 
 /**

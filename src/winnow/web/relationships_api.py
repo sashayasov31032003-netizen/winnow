@@ -27,6 +27,17 @@ class RelationshipsRequest(BaseModel):
     max_variables: int = Field(default=DEFAULT_MAX_VARIABLES, ge=2, le=120)
 
 
+@router.get("/datasets/{dataset_id}/revision")
+def dataset_revision_endpoint(
+    dataset_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Версия файла для автоматического обновления карты после правок."""
+    row = _owned(dataset_id, user, db)
+    return {"revision": dataset_revision(row.path)}
+
+
 @router.post("/datasets/{dataset_id}/relationships")
 def relationships(
     dataset_id: int,

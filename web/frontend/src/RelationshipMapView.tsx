@@ -66,6 +66,32 @@ function directionTitle(direction: string): string {
   return "без направления";
 }
 
+function analysisMethods(node: RelationshipNode): string[] {
+  if (node.measure === "scale") {
+    return [
+      "Корреляции (Pearson, Spearman)",
+      "Линейная регрессия",
+      "Сравнение групп (t-тест / ANOVA)",
+      "Описательные статистики",
+    ];
+  }
+  if (node.measure === "ordinal") {
+    return [
+      "Корреляции Спирмена и Кендалла",
+      "Непараметрические сравнения групп",
+      "Таблицы сопряжённости",
+    ];
+  }
+  if (node.measure === "nominal") {
+    return [
+      "Частоты",
+      "Таблицы сопряжённости (χ², V Крамера)",
+      "Сравнение групп",
+    ];
+  }
+  return ["Описательные статистики"];
+}
+
 function edgeClass(edge: RelationshipEdge): string {
   if (edge.direction === "positive") return "positive";
   if (edge.direction === "negative") return "negative";
@@ -190,6 +216,31 @@ export function RelationshipMapView({ datasetId }: { datasetId: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetId, method]);
 
+  useEffect(() => {
+    if (!map) return;
+    let alive = true;
+    const check = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const current = await api.datasetRevision(datasetId);
+        if (alive && current.revision && current.revision !== map.dataset_revision) {
+          void load();
+        }
+      } catch {
+        // тихо: карта не должна ломаться из-за проверки версии
+      }
+    };
+    const timer = window.setInterval(() => void check(), 5000);
+    const onFocus = () => void check();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, map?.dataset_revision]);
+
   const positions = useMemo(
     () => (map ? layoutGraph(map.nodes, map.edges) : {}),
     [map],
@@ -283,6 +334,7 @@ export function RelationshipMapView({ datasetId }: { datasetId: number }) {
           <span className="relations-revision" title="Версия набора на момент расчёта">
             {map.dataset_revision.slice(0, 8)}
           </span>
+          <span className="muted small">обновляется после правок</span>
           <button type="button" onClick={() => void load()}>Обновить</button>
         </div>
       </div>
@@ -554,6 +606,10 @@ function NodePanel({
       <h3>Рекомендации</h3>
       <ul className="relations-notes">
         {node.recommendations.map((text) => <li key={text}>{text}</li>)}
+      </ul>
+      <h3>Доступные методы</h3>
+      <ul className="relations-notes">
+        {analysisMethods(node).map((text) => <li key={text}>{text}</li>)}
       </ul>
       <h3>Связи</h3>
       <div className="relations-edge-list">

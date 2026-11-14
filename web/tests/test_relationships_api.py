@@ -70,6 +70,9 @@ def test_relationship_map_returns_nodes_edges_and_summary(client):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["dataset_revision"]
+    revision = client.get(f"/api/datasets/{dataset_id}/revision")
+    assert revision.status_code == 200
+    assert revision.json()["revision"] == body["dataset_revision"]
     assert {node["name"] for node in body["nodes"]} >= {"x", "y", "group", "city"}
     assert body["edges"]
     edge = next(item for item in body["edges"] if {item["source"], item["target"]} == {"x", "y"})
