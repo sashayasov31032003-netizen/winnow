@@ -1,15 +1,16 @@
-﻿# Запуск тестов Winnow.
+# Запуск тестов Winnow.
 #
-#   powershell -File run_tests.ps1          # все тесты
+#   powershell -File run_tests.ps1          # все тесты движка
 #   powershell -File run_tests.ps1 -Fast    # без тестов Word и Excel
-#   powershell -File run_tests.ps1 -Gui     # ещё и проверка интерфейса и экспорта
+#
+# Веб-тесты запускаются отдельно из окружения web\.venv:
+#   web\.venv\Scripts\python -m pytest web\tests -q
 #
 # Скрипт сам выбирает интерпретатор, в котором есть pytest, scipy и numpy:
 # в системе их несколько, и "просто python" может оказаться неподходящим.
 
 param(
-    [switch]$Fast,
-    [switch]$Gui
+    [switch]$Fast
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,13 +65,6 @@ try {
         & $python -B -m pytest -q
     }
     $testCode = $LASTEXITCODE
-
-    if ($Gui) {
-        Write-Host "Проверка интерфейса и экспорта (без открытия окон)..." -ForegroundColor Cyan
-        $env:QT_QPA_PLATFORM = "offscreen"
-        & $python -B (Join-Path $root "tools\verify_gui.py")
-        if ($LASTEXITCODE -ne 0 -and $testCode -eq 0) { $testCode = $LASTEXITCODE }
-    }
 }
 finally {
     Pop-Location

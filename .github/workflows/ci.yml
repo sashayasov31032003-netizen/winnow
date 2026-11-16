@@ -23,6 +23,8 @@ jobs:
           pip install -r web/requirements.txt
       - name: Run web/API tests
         run: python -m pytest web/tests -q
+      - name: Run engine tests
+        run: python -m pytest tests -q
 
   frontend:
     runs-on: ubuntu-latest

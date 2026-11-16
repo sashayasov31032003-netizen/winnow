@@ -23,7 +23,7 @@ from typing import Any, Callable
 from winnow.analysis.quality import quality_report
 from winnow.stats.engine import REGISTRY_BY_KEY, execute
 from winnow.stats.profile import profile_dataset
-from winnow.ui.procedure_specs import DIALOG_SPECS
+from winnow.shared.procedure_specs import DIALOG_SPECS
 from winnow.web import storage
 from winnow.web.ai import store
 from winnow.web.ai.config import AISettings, raw_text_allowed

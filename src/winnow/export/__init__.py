@@ -2,7 +2,7 @@
 
 Вся логика форматирования чисел живёт в core.formatting и в рендерерах.
 Процедуры отдают голые числа - это позволяет одному и тому же результату быть
-корректным и в Qt-таблице, и в DOCX, и в Excel.
+корректным и в вебе, и в DOCX, и в Excel.
 """
 
 from winnow.export.html import report_to_html, result_to_html, table_to_html

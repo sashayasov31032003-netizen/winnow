@@ -30,7 +30,7 @@ from winnow.analysis.quality import quality_report
 from winnow.export import report_to_html, result_to_docx, result_to_xlsx
 from winnow.stats.charts import CHART_TYPES, build_chart_data, chart_caption
 from winnow.stats.multianswer import detect_multi_answer, format_report, split_all
-from winnow.ui.procedure_specs import DIALOG_SPECS
+from winnow.shared.procedure_specs import DIALOG_SPECS
 from winnow.web import charts_svg
 from winnow.stats.engine import REGISTRY_BY_KEY, execute
 from winnow.web import storage, survey_dataset, surveys

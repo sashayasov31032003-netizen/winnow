@@ -111,7 +111,7 @@ def test_execute_fills_syntax_when_runner_does_not():
 
 def test_all_procedures_have_dialog_specs():
     """Каждая зарегистрированная процедура должна быть доступна из интерфейса."""
-    from winnow.ui.procedure_specs import DIALOG_SPECS
+    from winnow.shared.procedure_specs import DIALOG_SPECS
 
     for info in REGISTRY:
         assert info.key in DIALOG_SPECS, f"нет описания окна для {info.key}"
@@ -119,7 +119,7 @@ def test_all_procedures_have_dialog_specs():
 
 def test_dialog_specs_build_commands_without_gui():
     """Сборщики команд должны работать без Qt - это позволяет их тестировать."""
-    from winnow.ui.procedure_specs import DIALOG_SPECS
+    from winnow.shared.procedure_specs import DIALOG_SPECS
 
     dataset = demo_dataset(n=50, seed=9)
     cases = {
@@ -200,7 +200,7 @@ def test_dialog_specs_build_commands_without_gui():
 
 
 def test_group_values_parsing_is_tolerant():
-    from winnow.ui.procedure_specs import _parse_group_values
+    from winnow.shared.procedure_specs import _parse_group_values
 
     assert _parse_group_values("1, 2") == [1.0, 2.0]
     assert _parse_group_values("1;2") == [1.0, 2.0]
