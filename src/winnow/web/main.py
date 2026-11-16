@@ -27,6 +27,7 @@ from winnow.web.core import SECRET, init_db
 from winnow.web.monitoring_api import router as monitoring_router
 from winnow.web.relationships_api import router as relationships_router
 from winnow.web.stress_api import router as stress_router
+from winnow.web.study_api import router as study_router
 
 #: Собранный интерфейс (npm run build в web/frontend).
 FRONTEND_DIST = (
@@ -83,6 +84,8 @@ def create_app() -> FastAPI:
     app.include_router(relationships_router)
     # Мониторинг: сравнение двух волн исследования.
     app.include_router(monitoring_router)
+    # Исследования, волны и тренды.
+    app.include_router(study_router)
 
     def app_page() -> FileResponse:
         """Отдаёт собранный интерфейс: маршрут внутри разбирает JavaScript.

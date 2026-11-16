@@ -517,6 +517,100 @@ export type MonitoringReport = {
   methodology: Record<string, unknown>;
 };
 
+// ---------------------------------------------------- исследования и волны
+
+export type StudySummary = {
+  id: number;
+  name: string;
+  description: string;
+  waves: number;
+  created_at: string;
+};
+
+export type StudyWave = {
+  id: number;
+  dataset_id: number;
+  label: string;
+  year: number | null;
+  position: number;
+  dataset_name: string;
+  n_cases: number;
+  n_variables: number;
+};
+
+export type StudyDetail = {
+  id: number;
+  name: string;
+  description: string;
+  created_at: string;
+  waves: StudyWave[];
+};
+
+export type TrendWave = {
+  id: number | null;
+  label: string;
+  year: number | null;
+  n_cases: number;
+  position: number;
+};
+
+export type TrendVariable = {
+  name: string;
+  display: string;
+  kind: "numeric" | "categorical";
+  measure: string;
+  waves: {
+    label: string;
+    year: number | null;
+    n: number;
+    mean?: number | null;
+    median?: number | null;
+    sd?: number | null;
+    shares?: Record<string, number>;
+    counts?: Record<string, number>;
+  }[];
+  trend: {
+    slope?: number;
+    slope_unit?: string;
+    r_squared?: number | null;
+    p?: number | null;
+    change?: number | null;
+    percent?: number | null;
+    direction?: "up" | "down" | "same";
+    chi2?: number | null;
+    df?: number;
+    cramers_v?: number | null;
+    share_points?: Record<string, number>;
+    max_shift?: number | null;
+    summary: string;
+  };
+  p: number | null;
+  q: number | null;
+  significant: boolean;
+  warning: string;
+};
+
+export type TrendReport = {
+  waves: TrendWave[];
+  variables: TrendVariable[];
+  summary: {
+    n_waves: number;
+    common_variables: number;
+    compared_variables: number;
+    changed: number;
+    stable: number;
+    skipped: string[];
+    top_trends: {
+      name: string;
+      display: string;
+      kind: string;
+      summary: string;
+      q: number | null;
+    }[];
+  };
+  methodology: Record<string, unknown>;
+};
+
 export type AIRunSummary = {
   run_id: number | null;
   procedure: string;
@@ -906,6 +1000,39 @@ export const api = {
     request<{ baseline_id: number; current_id: number; report: MonitoringReport }>(
       "/api/monitoring/compare",
       jsonInit({ baseline_id: baselineId, current_id: currentId, variables: variables ?? null }),
+    ),
+
+  studies: () => request<{ studies: StudySummary[] }>("/api/studies"),
+
+  createStudy: (name: string, description = "") =>
+    request<StudySummary>("/api/studies", jsonInit({ name, description })),
+
+  study: (studyId: number) => request<StudyDetail>(`/api/studies/${studyId}`),
+
+  addStudyWave: (
+    studyId: number,
+    datasetId: number,
+    label: string,
+    year: number | null,
+  ) =>
+    request<StudyWave>(`/api/studies/${studyId}/waves`, jsonInit({
+      dataset_id: datasetId,
+      label,
+      year,
+    })),
+
+  removeStudyWave: (studyId: number, waveId: number) =>
+    request<{ deleted: number }>(`/api/studies/${studyId}/waves/${waveId}`, {
+      method: "DELETE",
+    }),
+
+  deleteStudy: (studyId: number) =>
+    request<{ deleted: number }>(`/api/studies/${studyId}`, { method: "DELETE" }),
+
+  studyTrends: (studyId: number, variables?: string[]) =>
+    request<{ study_id: number; study_name: string; report: TrendReport }>(
+      `/api/studies/${studyId}/trends`,
+      jsonInit({ variables: variables ?? null, alpha: 0.05 }),
     ),
 };
 

@@ -73,6 +73,7 @@ web\.venv\Scripts\python -m pip install -r web\requirements.txt
 | **Research Stress Test**: HC0–HC3, влияние наблюдений, спецификации, Bootstrap | готово (MVP) |
 | **Карта взаимосвязей**: узлы-переменные, корреляции, V Крамера, η², FDR | готово |
 | **Мониторинг волн**: сравнение двух наборов, средние/доли, Welch/χ², FDR | готово |
+| **Исследования**: волны, таймлайн и тренды по 3+ волнам | готово |
 | Поиск закономерностей, сравнение моделей, What-if, граф, многорасчётные отчёты | следующие фазы |
 
 ## Как устроено
@@ -89,6 +90,7 @@ src/winnow/web/          сервер
   stress_api.py           Research Stress Test: прогон и сохранение
   relationships_api.py    карта связей: узлы, рёбра, сводка
   monitoring_api.py       сравнение двух волн исследования
+  study_api.py            исследования, волны и тренды
   runs.py                 общее сохранение/чтение analysis_runs
   ai_api.py               ИИ: чат потоком (SSE), диалоги, сохранённые расчёты
   ai/                     Research Intelligence
@@ -107,16 +109,18 @@ src/winnow/analysis/
   stress.py               Research Stress Test: сценарии, Bootstrap, отчёт
   relationships.py        карта связей: корреляции, V Крамера, η², FDR
   monitoring.py           сравнение двух волн: средние, доли, Welch/χ²
+  trends.py               тренды по 3+ волнам: OLS, χ², FDR
 web/frontend/             React + TypeScript + Vite
   src/ResearchAI.tsx      раздел «Исследование AI»: чат и карточки расчётов
   src/MonitoringView.tsx  раздел «Мониторинг»: две волны и таблица изменений
+  src/StudyView.tsx       раздел «Исследования»: волны, таймлайн, тренды
   src/StressTestView.tsx  раздел «Устойчивость»: форма и отчёт
   src/RelationshipMapView.tsx  раздел «Карта связей»: SVG-сеть и панели
   src/QualityPanel.tsx    вкладка «Качество»: проблемы, метрики, переменные
   src/SurveysView.tsx     мои опросы, конструктор, ответы
   src/PublicForm.tsx      публичная форма /s/<slug>
   src/surveyAnswers.ts    значения полей и проверка обязательных
-web/tests/                тесты API, ИИ и качества (137)
+web/tests/                тесты API, ИИ и качества (139)
 web/run.cmd, open.cmd     запуск и открытие
 ```
 
@@ -191,6 +195,8 @@ web/run.cmd, open.cmd     запуск и открытие
 | `GET /api/stress-tests/{run_id}/export?format=` | экспорт в html / docx / xlsx |
 | `POST /api/datasets/{id}/relationships` | карта связей переменных |
 | `POST /api/monitoring/compare` | сравнение двух волн исследования |
+| `GET/POST /api/studies` | исследования и волны |
+| `POST /api/studies/{id}/trends` | тренды по 3+ волнам |
 | `GET /api/ai/config` | модель, провайдер и остаток квоты; ключа здесь нет |
 | `POST /api/ai/chat` | один ход агента потоком событий (SSE) |
 | `GET /api/ai/conversations`, `GET/DELETE .../{id}` | диалоги и их история |
@@ -255,6 +261,14 @@ web/run.cmd, open.cmd     запуск и открытие
 * p и q (FDR), фильтр «только значимые», поиск, раскрытие долей;
 * это независимые выборки; сравнение не доказывает причинный эффект.
 
+### Исследования и тренды
+
+* отдельный раздел **«Исследования»**; исследование хранит наборы-волны и годы;
+* волны добавляются и удаляются, один набор — одна волна;
+* по общим переменным всех волн считаются OLS-тренд средних и χ²-динамика долей;
+* sparkline, p/q (FDR), таймлайн, фильтр по переменной;
+* волны — независимые выборки; тренд не доказывает причинность.
+
 ### Research Intelligence
 
 * **ключ модели хранится только в окружении сервера** (`WINNOW_AI_KEY`); клиент
@@ -313,8 +327,8 @@ web/run.cmd, open.cmd     запуск и открытие
 
 ```powershell
 $env:PYTHONPATH = "src"
-web\.venv\Scripts\python -m pytest web\tests -q     # 137 тестов API, ИИ и качества
-python -m pytest -q                                    # 459 тестов движка
+web\.venv\Scripts\python -m pytest web\tests -q     # 139 тестов API, ИИ и качества
+python -m pytest -q                                    # 463 теста движка
 ```
 
 ## Настройки
@@ -451,6 +465,7 @@ npm.cmd run build   # собрать в dist, его отдаёт сервер
   проверяет качество данных и линейной модели. Ещё не сделаны поиск
   закономерностей, сравнение моделей и многорасчётные отчёты (см.
   `docs/research-intelligence.md`, `docs/quality-inspector.md`,
-  `docs/stress-test.md`, `docs/relationship-map.md`, `docs/monitoring.md`).
+  `docs/stress-test.md`, `docs/relationship-map.md`, `docs/monitoring.md`,
+  `docs/studies.md`).
   Ответ приходит целиком, без потоковых токенов; бесплатные модели имеют суточный
   лимит и могут обучаться на промптах — для реальных данных нужен свой endpoint.

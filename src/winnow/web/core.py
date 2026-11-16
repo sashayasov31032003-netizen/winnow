@@ -27,6 +27,7 @@ from sqlalchemy import (  # noqa: E402
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import (  # noqa: E402
@@ -103,6 +104,9 @@ class User(Base):
     surveys: Mapped[list["Survey"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
+    studies: Mapped[list["Study"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
 
 
 class Invite(Base):
@@ -141,6 +145,49 @@ class Dataset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     owner: Mapped[User] = relationship(back_populates="datasets")
+
+
+class Study(Base):
+    """Исследование с несколькими волнами: «Мониторинг 2022–2025»."""
+
+    __tablename__ = "studies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    owner: Mapped[User] = relationship(back_populates="studies")
+    waves: Mapped[list["StudyWave"]] = relationship(
+        back_populates="study",
+        cascade="all, delete-orphan",
+        order_by="StudyWave.position",
+    )
+
+
+class StudyWave(Base):
+    """Одна волна исследования, привязанная к набору данных."""
+
+    __tablename__ = "study_waves"
+    __table_args__ = (
+        UniqueConstraint("study_id", "dataset_id", name="uq_study_wave_dataset"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    study_id: Mapped[int] = mapped_column(
+        ForeignKey("studies.id", ondelete="CASCADE"), index=True
+    )
+    dataset_id: Mapped[int] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
+    label: Mapped[str] = mapped_column(String(80))
+    year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    study: Mapped[Study] = relationship(back_populates="waves")
+    dataset: Mapped[Dataset] = relationship()
 
 
 # --------------------------------------------------------------- опросы
