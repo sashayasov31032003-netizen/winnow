@@ -449,6 +449,74 @@ export type RelationshipMap = {
   methodology: Record<string, unknown>;
 };
 
+// ---------------------------------------------------- мониторинг волн
+
+export type MonitoringVariable = {
+  name: string;
+  display: string;
+  kind: "numeric" | "categorical";
+  measure: string;
+  baseline: {
+    n: number;
+    missing: number;
+    mean?: number | null;
+    sd?: number | null;
+    median?: number | null;
+    counts?: Record<string, number>;
+    shares?: Record<string, number>;
+  };
+  current: {
+    n: number;
+    missing: number;
+    mean?: number | null;
+    sd?: number | null;
+    median?: number | null;
+    counts?: Record<string, number>;
+    shares?: Record<string, number>;
+  };
+  change: {
+    mean_diff?: number | null;
+    percent?: number | null;
+    ci_low?: number | null;
+    ci_high?: number | null;
+    cohen_d?: number | null;
+    direction?: "up" | "down" | "same";
+    chi2?: number | null;
+    df?: number;
+    cramers_v?: number | null;
+    share_points?: Record<string, number>;
+    summary: string;
+  };
+  p: number | null;
+  q: number | null;
+  significant: boolean;
+  warning: string;
+};
+
+export type MonitoringReport = {
+  baseline: { name: string; n_cases: number };
+  current: { name: string; n_cases: number };
+  variables: MonitoringVariable[];
+  summary: {
+    common_variables: number;
+    compared_variables: number;
+    numeric: number;
+    categorical: number;
+    changed: number;
+    stable: number;
+    skipped: string[];
+    top_changes: {
+      name: string;
+      display: string;
+      kind: string;
+      change: string;
+      p: number | null;
+      q: number | null;
+    }[];
+  };
+  methodology: Record<string, unknown>;
+};
+
 export type AIRunSummary = {
   run_id: number | null;
   procedure: string;
@@ -833,6 +901,12 @@ export const api = {
 
   datasetRevision: (datasetId: number) =>
     request<{ revision: string }>(`/api/datasets/${datasetId}/revision`),
+
+  monitoringCompare: (baselineId: number, currentId: number, variables?: string[]) =>
+    request<{ baseline_id: number; current_id: number; report: MonitoringReport }>(
+      "/api/monitoring/compare",
+      jsonInit({ baseline_id: baselineId, current_id: currentId, variables: variables ?? null }),
+    ),
 };
 
 /**

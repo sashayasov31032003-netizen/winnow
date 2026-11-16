@@ -7,6 +7,7 @@ import {
   type User,
 } from "./api";
 import { DatasetView } from "./DatasetView";
+import { MonitoringView } from "./MonitoringView";
 import { RelationshipMapView } from "./RelationshipMapView";
 import { ResearchAI } from "./ResearchAI";
 import { StressTestView } from "./StressTestView";
@@ -41,9 +42,10 @@ export default function App() {
 //: С какого раздела начинать. Ссылки с главной приходят как
 //: /app?section=surveys («создать опрос»), /app?section=ai («исследование»)
 //: или /app?section=data («исследовать данные»).
-function requestedSection(): "data" | "surveys" | "ai" | "stress" | "relations" {
+function requestedSection(): "data" | "surveys" | "monitoring" | "ai" | "stress" | "relations" {
   const section = new URLSearchParams(window.location.search).get("section");
   if (section === "surveys") return "surveys";
+  if (section === "monitoring") return "monitoring";
   if (section === "ai") return "ai";
   if (section === "stress") return "stress";
   if (section === "relations") return "relations";
@@ -166,10 +168,13 @@ function Workspace({
 }: {
   user: User;
   onLogout: () => void;
-  initialSection: "data" | "surveys" | "ai" | "stress" | "relations";
+  initialSection: "data" | "surveys" | "monitoring" | "ai" | "stress" | "relations";
 }) {
-  // Пять разделов: данные, опросы, исследование с ИИ, устойчивость и карта связей.
-  const [section, setSection] = useState<"data" | "surveys" | "ai" | "stress" | "relations">(initialSection);
+  // Шесть разделов: данные, опросы, мониторинг волн, исследование с ИИ,
+  // устойчивость и карта связей.
+  const [section, setSection] = useState<
+    "data" | "surveys" | "monitoring" | "ai" | "stress" | "relations"
+  >(initialSection);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [surveys, setSurveys] = useState<SurveySummary[]>([]);
@@ -346,6 +351,14 @@ function Workspace({
             </button>
             <button
               type="button"
+              className={section === "monitoring" ? "active" : ""}
+              aria-pressed={section === "monitoring"}
+              onClick={() => setSection("monitoring")}
+            >
+              Мониторинг
+            </button>
+            <button
+              type="button"
               className={section === "ai" ? "active" : ""}
               aria-pressed={section === "ai"}
               onClick={() => setSection("ai")}
@@ -457,7 +470,9 @@ function Workspace({
                     ? "Выберите набор: Stress Test работает с его переменными и не меняет данные."
                     : section === "relations"
                       ? "Выберите набор: карта покажет связи его переменных, не меняя данные."
-                      : "Выберите набор: агент работает с ним и не меняет данные."}
+                      : section === "monitoring"
+                        ? "Для сравнения нужны два набора — например, 2024 и 2025."
+                        : "Выберите набор: агент работает с ним и не меняет данные."}
                 </p>
               )}
             </div>
@@ -678,6 +693,8 @@ function Workspace({
           ) : (
             <RelationshipMapView key={selected} datasetId={selected} />
           )
+        ) : section === "monitoring" ? (
+          <MonitoringView datasets={datasets} />
         ) : selected === null ? (
           <div className="card empty">
             <span className="empty-icon" aria-hidden="true">

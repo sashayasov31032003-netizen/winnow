@@ -73,8 +73,8 @@ export function Home() {
           Winnow — платформа для сбора и анализа данных. Анкету заполняют по
           ссылке без регистрации, а её ответы превращаются в набор данных: дальше
           частоты, таблицы сопряжённости, сравнение групп, графики и отчёт
-          простыми словами. Результат можно проверить на устойчивость и увидеть
-          карту связей переменных.
+          простыми словами. Результат можно проверить на устойчивость, увидеть
+          карту связей переменных и сравнить волны исследования год за годом.
         </p>
       </section>
 
@@ -112,6 +112,11 @@ export function Home() {
           <h2>Проверьте вывод, а не только p-value</h2>
         </div>
         <div className="feature-grid">
+          <a className="feature-card" href="/app?section=monitoring">
+            <span className="feature-kicker">Мониторинг</span>
+            <strong>Что изменилось за год?</strong>
+            <span>Сравните две волны по общим переменным: средние, доли, Welch, χ² и FDR.</span>
+          </a>
           <a className="feature-card" href="/app?section=stress">
             <span className="feature-kicker">Stress Test</span>
             <strong>Насколько устойчив результат?</strong>
@@ -121,11 +126,6 @@ export function Home() {
             <span className="feature-kicker">Карта связей</span>
             <strong>Что с чем связано?</strong>
             <span>Интерактивная сеть переменных: Pearson, Spearman, Kendall, V Крамера, η².</span>
-          </a>
-          <a className="feature-card" href="/app?section=data">
-            <span className="feature-kicker">Качество данных</span>
-            <strong>Можно ли этим числам верить?</strong>
-            <span>Пропуски, дубликаты, выбросы, мультиколлинеарность и диагностика модели.</span>
           </a>
           <a className="feature-card" href="/app?section=ai">
             <span className="feature-kicker">Research AI</span>
